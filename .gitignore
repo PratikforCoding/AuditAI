@@ -1,0 +1,56 @@
+cd AuditAI
+
+cat > .gitignore << 'EOF'
+# Secrets - NEVER commit!
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+eggs/
+*.egg-info/
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Logs
+*.log
+logs/
+
+# OS
+Thumbs.db
+
+# Secrets
+service-account-key.json
+*.pem
+*.key
+
+# Node
+node_modules/
+
+# Temporary
+*.tmp
+*.temp
+EOF
