@@ -68,16 +68,12 @@ const DashboardHeader = ({
                         </button>
                         {/* Mock Dropdown Menu */}
                         <div className="absolute right-0 mt-2 w-48 bg-[#1A1A1A] border border-neutral-800 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                            <a
-                                href="#"
-                                onClick={(e) => {
-                                    e.preventDefault();
-                                    console.log("View Profile clicked");
-                                }}
+                            <Link
+                                href="/profile"
                                 className="flex items-center px-4 py-2 text-neutral-300 hover:bg-neutral-800 rounded-t-lg"
                             >
                                 <User2 className="w-4 h-4 mr-2" /> Profile
-                            </a>
+                            </Link>
                             <a
                                 href="#"
                                 onClick={(e) => {

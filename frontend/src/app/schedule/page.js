@@ -6,7 +6,7 @@ import NotificationsSettings from "@/components/schedule/NotificationsSettings";
 import ThresholdsSettings from "@/components/schedule/ThresholdsSettings";
 import ExportSettings from "@/components/schedule/ExportSettings";
 import DangerZone from "@/components/schedule/DangerZone";
-import ProfileSettings from "@/components/schedule/ProfileSettings";
+
 import { Save } from "lucide-react";
 
 export default function SchedulePage() {
@@ -43,7 +43,6 @@ export default function SchedulePage() {
                     </p>
 
                     {/* Main Settings Sections */}
-                    <ProfileSettings />
                     <ScheduleSection />
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
