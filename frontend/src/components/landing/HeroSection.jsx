@@ -29,7 +29,7 @@ export default function HeroSection() {
                         <span className="text-foreground">
                             Powered by{" "}
                         </span>{" "}
-                        <span>Gemini AI</span>
+                        <span>CHAT GPT</span>
                     </span>
                 </div>
 
