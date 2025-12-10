@@ -1,18 +1,15 @@
-"use client";
-import Image from "next/image";
-import Link from "next/link";
+import HeroSection from "@/components/landing/HeroSection";
+import FeaturesSection from "@/components/landing/FeaturesSection";
+import HowItWorks from "@/components/landing/HowItWorks";
+import Footer from "@/components/landing/Footer";
 
 export default function Home() {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-            <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-                <div>
-                    <h1 className="text-5xl">Landing Page</h1>
-                    <Link href={"/auth"} className="underline">
-                        Continue to AuditAI
-                    </Link>
-                </div>
-            </main>
+        <div className="min-h-screen bg-black text-white selection:bg-[var(--color-accent-light)] selection:text-black">
+            <HeroSection />
+            <FeaturesSection />
+            <HowItWorks />
+            <Footer />
         </div>
     );
 }
