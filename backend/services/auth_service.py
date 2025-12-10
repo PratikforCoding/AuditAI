@@ -10,6 +10,10 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+"""
+    Future plan: Refresh Token set up
+"""
+
 class AuthService:
     """Authentication Service"""
 
@@ -40,7 +44,7 @@ class AuthService:
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(minutes=30)
+            expire = datetime.utcnow() + timedelta(minutes=60)
 
         to_encode = {
             "sub": subject,
