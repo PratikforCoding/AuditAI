@@ -29,7 +29,7 @@ export default function SchedulePage() {
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-7xl mx-auto">
                 <DashboardHeader
                     title="Settings & Preferences"
                     userName="Audit User"

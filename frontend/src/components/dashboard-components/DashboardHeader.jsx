@@ -23,6 +23,7 @@ const DashboardHeader = ({
     const navItems = [
         { name: "Overview", href: "/dashboard" },
         { name: "Analytics", href: "/analytics" },
+        { name: "Audits", href: "/audits" },
         { name: "Recommendations", href: "/recommendations" },
         { name: "Settings", href: "/schedule" },
     ];
@@ -48,8 +49,8 @@ const DashboardHeader = ({
                             onClick={onRefresh}
                             disabled={isRefreshing}
                             className={`p-2 rounded-full border border-neutral-800 bg-[#080808] text-pink-400 hover:bg-neutral-800 transition-duration-200 ${isRefreshing
-                                    ? "opacity-70 cursor-not-allowed"
-                                    : "hover:border-accent-light"
+                                ? "opacity-70 cursor-not-allowed"
+                                : "hover:border-accent-light"
                                 }`}
                             title="Refresh Data"
                         >
@@ -101,8 +102,8 @@ const DashboardHeader = ({
                             key={item.href}
                             href={item.href}
                             className={`pb-3 text-sm font-medium transition-colors relative ${isActive
-                                    ? "text-accent-light"
-                                    : "text-neutral-400 hover:text-neutral-200"
+                                ? "text-accent-light"
+                                : "text-neutral-400 hover:text-neutral-200"
                                 }`}
                         >
                             {item.name}
