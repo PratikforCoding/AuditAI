@@ -41,8 +41,12 @@ const LoginPage = () => {
     return (
         // Pure Black background
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
+            {/* The background blur ball */}
+            {/*  !!!! IF REMOVED ==> Remove the backdrop filter blur from the card below */}
+            <div className="rounded-md size-10 bg-white shadow-[0_0_50px_40px_white] absolute top-[25%] left-[45%]"></div>
+
             {/* Near Black Card background, no heavy shadow */}
-            <div className="w-full max-w-md bg-card text-foreground p-8 md:p-10 rounded-xl">
+            <div className="w-full max-w-md bg-linear-to-br from-card via-card/90 to-white/10 border border-white/5 text-foreground p-8 md:p-10 rounded-xl [backdrop-filter:blur(10px)]">
                 {/* AuditAI Logo */}
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-extrabold text-accent-dark tracking-wider mb-2">

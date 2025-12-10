@@ -5,7 +5,7 @@ import Footer from "@/components/landing/Footer";
 
 export default function Home() {
     return (
-        <div className="min-h-screen bg-black text-white selection:bg-[var(--color-accent-light)] selection:text-black">
+        <div className="min-h-screen bg-black text-white selection:bg-accent-light selection:text-black">
             <HeroSection />
             <FeaturesSection />
             <HowItWorks />
