@@ -12,12 +12,12 @@ import {
 
 const data = [
     { name: "Dec", cost: 2100 },
-    { name: "Jan", cost: 2200 },
+    { name: "Jan", cost: 1800 },
     { name: "Feb", cost: 2150 },
-    { name: "Mar", cost: 2300 },
+    { name: "Mar", cost: 1500 },
     { name: "Apr", cost: 2250 },
     { name: "May", cost: 2400 },
-    { name: "Jun", cost: 2450 },
+    { name: "Jun", cost: 2650 },
 ];
 
 const CostTrendChart = () => {
@@ -36,6 +36,7 @@ const CostTrendChart = () => {
                             strokeDasharray="3 3"
                             stroke="#333"
                             vertical={false}
+                            // horizontal={false}
                         />
                         <XAxis
                             dataKey="name"
@@ -54,6 +55,8 @@ const CostTrendChart = () => {
                                 backgroundColor: "#0e0e0e",
                                 border: "1px solid #333",
                                 borderRadius: "8px",
+                                color: "#fff",
+                                fontSize: "small",
                             }}
                             itemStyle={{ color: "#fff" }}
                         />
@@ -61,9 +64,9 @@ const CostTrendChart = () => {
                             type="monotone"
                             dataKey="cost"
                             stroke="#db2777" // Pink-600 to match accent
-                            strokeWidth={3}
-                            dot={{ fill: "#db2777", r: 4 }}
-                            activeDot={{ r: 6, fill: "#fff" }}
+                            strokeWidth={2}
+                            dot={{ fill: "#db2777", r: 2 }}
+                            activeDot={{ r: 3, fill: "#fff" }}
                         />
                     </LineChart>
                 </ResponsiveContainer>
