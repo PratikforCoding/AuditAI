@@ -16,6 +16,7 @@ import {
 import ExportButton from "@/components/resource-components/ExportButton";
 import ResourceDetailModal from "@/components/resource-components/ResourceDetailModal";
 import StatusBadge from "@/components/resource-components/StatusBadge";
+import DashboardHeader from "@/components/dashboard-components/DashboardHeader";
 
 // --- MOCK DATA GENERATOR ---
 const generateMockResources = (count) => {
@@ -113,23 +114,18 @@ const ResourcesPage = () => {
         <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-3xl font-extrabold text-foreground">
-                            <span className="text-accent-dark">Cloud</span>{" "}
-                            Resources
-                        </h1>
-                        <p className="text-text-secondary mt-1">
-                            Manage and monitor your infrastructure assets.
-                        </p>
-                    </div>
-                    <ExportButton data={filteredResources} />
-                </div>
+
+                <DashboardHeader
+                    title="Resources"
+                    userName="Audit User"
+                    // onRefresh={handleRefresh}
+                    // isRefreshing={isRefreshing}
+                />
 
                 {/* Filters Bar */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card p-4 rounded-xl border border-border-dark">
                     {/* Search */}
-                    <div className="relative md:col-span-2">
+                    <div className="relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-text-muted" />
                         <input
                             type="text"
@@ -176,6 +172,10 @@ const ResourcesPage = () => {
                             <option value="Stopped">Stopped</option>
                             <option value="Error">Error</option>
                         </select>
+                    </div>
+
+                    <div className="w-full border place-items-end">
+                        <ExportButton data={filteredResources} />
                     </div>
                 </div>
 

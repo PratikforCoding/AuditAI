@@ -2,7 +2,7 @@
 import React from "react";
 import { RefreshCw, User2, LogOut } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Navbar from "../navbar/Navbar";
 
 /**
  * Reusable Header for Dashboard pages (Overview, Analytics, etc.)
@@ -18,23 +18,14 @@ const DashboardHeader = ({
     onRefresh,
     isRefreshing = false,
 }) => {
-    const pathname = usePathname();
-
-    const navItems = [
-        { name: "Overview", href: "/dashboard" },
-        { name: "Analytics", href: "/analytics" },
-        { name: "Audits", href: "/audits" },
-        { name: "Recommendations", href: "/recommendations" },
-        { name: "Settings", href: "/schedule" },
-    ];
-
     return (
         <div className="mb-8">
             <header className="flex justify-between items-center pb-4 border-b border-border-light">
                 <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-extrabold text-foreground">
-                        Audit<span className="text-accent-dark mr-3">AI</span>
-                        {title}
+                    <h1 className="text-4xl font-extrabold text-foreground">
+                        Audit
+                        <span className="text-accent-dark mr-3">AI</span>
+                        <span className="text-3xl font-semibold">{title}</span>
                     </h1>
                 </div>
 
@@ -48,15 +39,17 @@ const DashboardHeader = ({
                         <button
                             onClick={onRefresh}
                             disabled={isRefreshing}
-                            className={`p-2 rounded-full border border-neutral-800 bg-[#080808] text-pink-400 hover:bg-neutral-800 transition-duration-200 ${isRefreshing
-                                ? "opacity-70 cursor-not-allowed"
-                                : "hover:border-accent-light"
-                                }`}
+                            className={`p-2 rounded-full border border-neutral-800 bg-[#080808] text-pink-400 hover:bg-neutral-800 transition-duration-200 ${
+                                isRefreshing
+                                    ? "opacity-70 cursor-not-allowed"
+                                    : "hover:border-accent-light"
+                            }`}
                             title="Refresh Data"
                         >
                             <RefreshCw
-                                className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""
-                                    }`}
+                                className={`w-5 h-5 ${
+                                    isRefreshing ? "animate-spin" : ""
+                                }`}
                             />
                         </button>
                     )}
@@ -90,26 +83,7 @@ const DashboardHeader = ({
             </header>
 
             {/* Navigation Tabs */}
-            <nav className="flex items-center gap-6 mt-4 border-b border-white/5">
-                {navItems.map((item) => {
-                    const isActive = pathname === item.href;
-                    return (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={`pb-3 text-sm font-medium transition-colors relative ${isActive
-                                ? "text-accent-light"
-                                : "text-neutral-400 hover:text-neutral-200"
-                                }`}
-                        >
-                            {item.name}
-                            {isActive && (
-                                <span className="absolute bottom-0 left-0 w-full h-[2px] bg-accent-light rounded-t-full" />
-                            )}
-                        </Link>
-                    );
-                })}
-            </nav>
+            <Navbar />
         </div>
     );
 };
