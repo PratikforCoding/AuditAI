@@ -1,66 +1,158 @@
 """
-AuditAI Backend API
-Infrastructure auditor powered by Gemini AI
+Main FastAPI application setup
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from dotenv import load_dotenv
-from backend import api_agents  # ← ADD THIS LINE
+from fastapi.responses import JSONResponse
+from datetime import datetime
+import logging
 
-# Load environment variables
-load_dotenv()
+from backend.config.settings import settings
+from backend.utils.logger import get_logger
+from backend import api_auth, api_agents
 
-# Initialize FastAPI app
+# Initialize logger
+logger = get_logger(__name__)
+
+# Create FastAPI app
 app = FastAPI(
-    title="AuditAI API",
-    description="Infrastructure auditor for GCP using Gemini AI",
-    version="1.0.0"
+    title="AuditAI Backend",
+    description="Infrastructure audit and cost optimization platform with AI-powered recommendations",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
-# Add CORS middleware
+# ===== CORS Configuration =====
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3000")],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        settings.FRONTEND_URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include AI Agent router ← ADD THIS BLOCK
-app.include_router(api_agents.router)
+# ===== Error Handlers =====
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler"""
+    logger.error(f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
+
+# ===== Middleware =====
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests"""
+    logger.info(f"{request.method} {request.url.path}")
+    response = await call_next(request)
+    logger.info(f"Response status: {response.status_code}")
+    return response
+
+# ===== Health Check Endpoints =====
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Basic health check endpoint"""
     return {
         "status": "healthy",
         "service": "AuditAI Backend",
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "timestamp": datetime.utcnow().isoformat()
     }
 
+
 @app.get("/api/status")
-async def status():
-    """Get service status"""
+async def system_status():
+    """Detailed system status"""
+    try:
+        from backend.models.database import db
+        
+        mongodb_status = "healthy"
+        try:
+            db.ping()
+        except:
+            mongodb_status = "unhealthy"
+        
+        return {
+            "status": "healthy",
+            "components": {
+                "mongodb": mongodb_status,
+                "gemini_api": "healthy",
+                "gcp": "configured"
+            },
+            "version": "2.0.0",
+            "environment": settings.ENVIRONMENT,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Status check failed: {str(e)}")
+        return {
+            "status": "degraded",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+# ===== Include Routers =====
+
+app.include_router(api_auth.router)
+app.include_router(api_agents.router)
+
+# ===== Startup/Shutdown Events =====
+
+@app.on_event("startup")
+async def startup_event():
+    """Startup event handler"""
+    logger.info("=" * 60)
+    logger.info("🚀 AuditAI Backend Server Starting")
+    logger.info("=" * 60)
+    logger.info(f"📍 API Server: http://{settings.HOST}:{settings.PORT}")
+    logger.info(f"📚 API Documentation: http://{settings.HOST}:{settings.PORT}/docs")
+    logger.info(f"🔍 Alternative Docs: http://{settings.HOST}:{settings.PORT}/redoc")
+    logger.info(f"🔐 Authentication: JWT Token Required")
+    logger.info(f"📊 Database: MongoDB ({settings.DATABASE_NAME})")
+    logger.info(f"🤖 AI Model: {settings.GEMINI_MODEL}")
+    logger.info("=" * 60)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event handler"""
+    logger.info("=" * 60)
+    logger.info("⛔ AuditAI Backend Server Shutting Down")
+    logger.info("=" * 60)
+
+# ===== Root Endpoint =====
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
     return {
-        "gcp_connected": True,
-        "mongodb_connected": False,
-        "gemini_ready": True,
-        "available_endpoints": [
-            "/api/v1/agent/analyze",
-            "/api/v1/agent/suggestions",
-            "/api/v1/agent/execute-plan",
-            "/api/v1/agent/report",
-            "/api/v1/agent/health"
-        ]
+        "service": "AuditAI Backend",
+        "version": "2.0.0",
+        "docs": "http://localhost:8000/docs",
+        "status": "running"
     }
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "api:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
+        app,
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower()
     )

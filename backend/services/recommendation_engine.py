@@ -42,7 +42,7 @@ class ProductionRecommendationEngine:
         self.IDLE_DAYS_THRESHOLD = 30  # days of <5% utilization
         self.MIN_MONTHLY_SAVINGS = 10.0  # Don't recommend if savings < $10/month
         
-    def analyze_infrastructure(self) -> List[Recommendation]:
+    def analyze_infrastructure(self, days: int = 30) -> List[Recommendation]:
         """
         Complete analysis using official GCP data
         Returns high-confidence recommendations with real numbers

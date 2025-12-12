@@ -1,233 +1,604 @@
 """
-Production-Ready Recommendation Engine
-Combines GCP APIs with domain expertise
+Cost Calculator - Infrastructure Cost Analysis & Projections
+Calculates costs, trends, and ROI for infrastructure recommendations
 """
 
-from typing import Dict, List
-from datetime import datetime
-import uuid
-import logging
-from enum import Enum
 
-from backend.models.schemas import Recommendation, Severity
-from backend.services.gcp_billing_service import GCPBillingService
-from backend.services.gcp_monitoring_service import GCPMonitoringService
-from backend.services.gcp_recommender_service import GCPRecommenderService
+from typing import Dict, List, Tuple, Optional
+from datetime import datetime, timedelta
+import logging
+from dataclasses import dataclass
+
 
 logger = logging.getLogger(__name__)
 
 
-class RecommendationType(str, Enum):
-    IDLE_RESOURCE = "idle_resource"
-    OVERSIZED_RESOURCE = "oversized_resource"
-    UNUSED_DISK = "unused_disk"
-    SECURITY_ISSUE = "security_issue"
-    COST_OPTIMIZATION = "cost_optimization"
+@dataclass
+class CostBreakdown:
+    """Cost breakdown data structure"""
+    service: str
+    cost: float
+    percentage: float
+    trend: str  # "up", "down", "stable"
+    monthly_projection: float
 
 
-class ProductionRecommendationEngine:
+@dataclass
+class ROICalculation:
+    """ROI calculation result"""
+    recommendation_id: str
+    monthly_savings: float
+    annual_savings: float
+    implementation_cost: float
+    payback_months: float
+    roi_percentage: float
+    confidence: float
+
+
+class CostCalculator:
     """
-    Production-grade recommendation engine using official GCP APIs
-    All recommendations are based on actual data, not guesses
+    Advanced cost calculation engine for infrastructure optimization.
+    Calculates savings, ROI, projections, and cost trends.
     """
     
-    def __init__(self, project_id: str):
-        self.project_id = project_id
-        self.billing_service = GCPBillingService(project_id)
-        self.monitoring_service = GCPMonitoringService(project_id)
-        self.recommender_service = GCPRecommenderService(project_id)
+    def __init__(self):
+        """Initialize cost calculator"""
+        self.logger = logger
         
-        # Thresholds based on industry standards and GCP best practices
-        self.IDLE_CPU_THRESHOLD = 5.0  # % utilization
-        self.IDLE_DAYS_THRESHOLD = 30  # days of <5% utilization
-        self.MIN_MONTHLY_SAVINGS = 10.0  # Don't recommend if savings < $10/month
-        
-    def analyze_infrastructure(self) -> List[Recommendation]:
+    # ========================================================================
+    # Cost Analysis Methods
+    # ========================================================================
+    
+    def calculate_cost_breakdown(
+        self, 
+        costs_by_service: List[Dict]
+    ) -> List[CostBreakdown]:
         """
-        Complete analysis using official GCP data
-        Returns high-confidence recommendations with real numbers
-        """
-        recommendations = []
+        Calculate cost breakdown with percentages and trends
         
+        Args:
+            costs_by_service: List of costs with service names
+            
+        Returns:
+            List of CostBreakdown objects with analysis
+        """
         try:
-            # Step 1: Get official GCP recommendations
-            logger.info("Fetching official GCP recommendations...")
-            gcp_recs = self.recommender_service.get_all_recommendations()
-            recommendations.extend(self._convert_gcp_recommendations(gcp_recs))
+            total_cost = sum(item['total_cost'] for item in costs_by_service)
             
-            # Step 2: Get real metrics for deeper analysis
-            logger.info("Fetching monitoring metrics...")
-            # (Would integrate with actual resource list from GCP)
+            if total_cost == 0:
+                self.logger.warning("Total cost is zero")
+                return []
             
-            # Step 3: Get actual costs
-            logger.info("Fetching billing data...")
-            cost_data = self.billing_service.get_project_total_cost(days=30)
-            logger.info(f"Project costs: ${cost_data['total_cost']} in last 30 days")
+            breakdowns = []
+            for item in costs_by_service:
+                service_name = item['service_name']
+                cost = item['total_cost']
+                percentage = (cost / total_cost) * 100
+                
+                # Determine trend (simple: compare to average)
+                avg_cost = total_cost / len(costs_by_service)
+                trend = "up" if cost > avg_cost * 1.1 else ("down" if cost < avg_cost * 0.9 else "stable")
+                
+                # Project to monthly
+                monthly_projection = cost  # Already monthly from billing
+                
+                breakdown = CostBreakdown(
+                    service=service_name,
+                    cost=round(cost, 2),
+                    percentage=round(percentage, 2),
+                    trend=trend,
+                    monthly_projection=round(monthly_projection, 2)
+                )
+                
+                breakdowns.append(breakdown)
             
-            return recommendations
+            # Sort by cost (highest first)
+            breakdowns.sort(key=lambda x: x.cost, reverse=True)
             
+            self.logger.info(f"Calculated breakdown for {len(breakdowns)} services")
+            return breakdowns
+        
         except Exception as e:
-            logger.error(f"Error analyzing infrastructure: {e}")
+            self.logger.error(f"Error calculating cost breakdown: {e}")
             raise
     
-    def _convert_gcp_recommendations(self, gcp_recs: List[Dict]) -> List[Recommendation]:
-        """Convert official GCP recommendations to our schema"""
-        recommendations = []
+    def calculate_monthly_projection(
+        self,
+        daily_costs: List[Dict],
+        days: int = 30
+    ) -> Dict[str, float]:
+        """
+        Project monthly cost from daily data
         
-        for rec in gcp_recs:
-            monthly_savings = rec.get('monthly_savings', 0)
+        Args:
+            daily_costs: List of daily cost data
+            days: Number of days in projection period
             
-            # Only include recommendations with meaningful savings
-            if monthly_savings < self.MIN_MONTHLY_SAVINGS:
-                logger.debug(f"Skipping {rec['title']} - savings ${monthly_savings} < minimum")
-                continue
+        Returns:
+            {
+                'current_month': float,
+                'projected_month': float,
+                'trend': str,
+                'growth_rate': float
+            }
+        """
+        try:
+            if not daily_costs:
+                return {
+                    'current_month': 0.0,
+                    'projected_month': 0.0,
+                    'trend': 'stable',
+                    'growth_rate': 0.0
+                }
             
-            # Determine risk level based on action type
-            risk_level = self._calculate_risk_level(rec)
+            # Get current and previous month totals
+            current_month_cost = sum(item['cost'] for item in daily_costs)
+            daily_average = current_month_cost / days if days > 0 else 0
             
-            # Create recommendation with real data
-            recommendation = Recommendation(
-                id=str(uuid.uuid4()),
-                resource_id=rec.get('resource_id', 'unknown'),
-                title=rec['title'],
-                description=rec['description'],
-                recommendation_type=self._classify_recommendation(rec),
-                severity=self._determine_severity(rec, monthly_savings),
-                monthly_savings=monthly_savings,
-                annual_savings=rec.get('estimated_annual_savings', 0),
-                confidence=self._map_confidence(rec.get('confidence')),
-                risk_level=risk_level,
-                difficulty=self._determine_difficulty(rec),
-                action_items=rec.get('actions', []),
-                source='GCP Recommender API',
-                recommender_id=rec.get('recommender', 'unknown'),
-                created_at=datetime.utcnow(),
-                data_source='production_api'
+            # Project for full month
+            projected_month = daily_average * 30
+            
+            # Calculate growth rate (if we have trend data)
+            growth_rate = 0.0
+            if len(daily_costs) > 1:
+                first_half = daily_costs[:len(daily_costs)//2]
+                second_half = daily_costs[len(daily_costs)//2:]
+                
+                first_avg = sum(d['cost'] for d in first_half) / len(first_half) if first_half else 0
+                second_avg = sum(d['cost'] for d in second_half) / len(second_half) if second_half else 0
+                
+                if first_avg > 0:
+                    growth_rate = ((second_avg - first_avg) / first_avg) * 100
+            
+            # Determine trend
+            if growth_rate > 5:
+                trend = "up"
+            elif growth_rate < -5:
+                trend = "down"
+            else:
+                trend = "stable"
+            
+            result = {
+                'current_month': round(current_month_cost, 2),
+                'projected_month': round(projected_month, 2),
+                'daily_average': round(daily_average, 2),
+                'trend': trend,
+                'growth_rate': round(growth_rate, 2),
+                'projection_confidence': self._calculate_confidence(len(daily_costs))
+            }
+            
+            self.logger.info(f"Monthly projection: ${result['projected_month']}/month (trend: {trend})")
+            return result
+        
+        except Exception as e:
+            self.logger.error(f"Error calculating monthly projection: {e}")
+            raise
+    
+    def calculate_annual_projection(
+        self,
+        monthly_cost: float,
+        growth_rate: float = 0.0
+    ) -> Dict[str, float]:
+        """
+        Project annual cost with growth rate
+        
+        Args:
+            monthly_cost: Current monthly cost in USD
+            growth_rate: Monthly growth rate as percentage (e.g., 2.5 for 2.5% growth)
+            
+        Returns:
+            {
+                'annual_cost': float,
+                'by_quarter': [float, float, float, float],
+                'monthly_growth': float,
+                'with_growth': float
+            }
+        """
+        try:
+            annual_cost = monthly_cost * 12
+            
+            # Calculate quarterly costs
+            quarterly_costs = []
+            running_cost = monthly_cost
+            
+            for quarter in range(4):
+                quarter_cost = running_cost * 3
+                quarterly_costs.append(round(quarter_cost, 2))
+                
+                # Apply growth for next quarter
+                if growth_rate != 0:
+                    growth_factor = (1 + (growth_rate / 100)) ** 3
+                    running_cost = running_cost * growth_factor
+            
+            # Total with growth
+            annual_with_growth = sum(quarterly_costs)
+            
+            result = {
+                'annual_cost_no_growth': round(annual_cost, 2),
+                'annual_cost_with_growth': round(annual_with_growth, 2),
+                'monthly_average': round(monthly_cost, 2),
+                'by_quarter': quarterly_costs,
+                'monthly_growth_rate': growth_rate,
+                'total_growth_dollars': round(annual_with_growth - annual_cost, 2)
+            }
+            
+            self.logger.info(f"Annual projection: ${result['annual_cost_with_growth']} (with {growth_rate}% growth)")
+            return result
+        
+        except Exception as e:
+            self.logger.error(f"Error calculating annual projection: {e}")
+            raise
+    
+    # ========================================================================
+    # ROI & Savings Calculation Methods
+    # ========================================================================
+    
+    def calculate_roi(
+        self,
+        recommendation_id: str,
+        monthly_savings: float,
+        implementation_cost: float = 0.0,
+        confidence: float = 0.85
+    ) -> ROICalculation:
+        """
+        Calculate ROI for a recommendation
+        
+        Args:
+            recommendation_id: ID of the recommendation
+            monthly_savings: Estimated monthly savings in USD
+            implementation_cost: One-time implementation cost
+            confidence: Confidence level (0-1)
+            
+        Returns:
+            ROICalculation object with complete ROI metrics
+        """
+        try:
+            annual_savings = monthly_savings * 12
+            
+            # Calculate payback period
+            if monthly_savings > 0:
+                payback_months = (implementation_cost / monthly_savings) if implementation_cost > 0 else 0
+            else:
+                payback_months = 0
+            
+            # Calculate ROI percentage
+            if implementation_cost > 0:
+                year_one_savings = annual_savings - implementation_cost
+                roi_percentage = (year_one_savings / implementation_cost) * 100
+            else:
+                roi_percentage = 100.0  # 100% if no implementation cost
+            
+            roi = ROICalculation(
+                recommendation_id=recommendation_id,
+                monthly_savings=round(monthly_savings, 2),
+                annual_savings=round(annual_savings, 2),
+                implementation_cost=round(implementation_cost, 2),
+                payback_months=round(payback_months, 1),
+                roi_percentage=round(roi_percentage, 2),
+                confidence=confidence
             )
             
-            recommendations.append(recommendation)
-            logger.info(f"Added recommendation: {recommendation.title} | Savings: ${monthly_savings}/month")
-        
-        return recommendations
-    
-    def _classify_recommendation(self, rec: Dict) -> str:
-        """Classify recommendation type based on recommender"""
-        recommender = rec.get('recommender', '')
-        
-        if 'idle' in recommender.lower():
-            return RecommendationType.IDLE_RESOURCE
-        elif 'changeType' in recommender:
-            return RecommendationType.OVERSIZED_RESOURCE
-        elif 'storage' in recommender.lower():
-            return RecommendationType.SECURITY_ISSUE
-        else:
-            return RecommendationType.COST_OPTIMIZATION
-    
-    def _determine_severity(self, rec: Dict, monthly_savings: float) -> Severity:
-        """
-        Determine severity based on:
-        1. GCP's confidence
-        2. Potential monthly savings
-        """
-        # GCP's priority is our primary indicator
-        gcp_severity = rec.get('severity', 'MEDIUM')
-        monthly_savings = monthly_savings or 0
-        
-        # Map GCP severity + savings to our severity scale
-        if gcp_severity == 'CRITICAL' or monthly_savings > 1000:
-            return Severity.CRITICAL
-        elif gcp_severity == 'HIGH' or monthly_savings > 500:
-            return Severity.HIGH
-        elif gcp_severity == 'MEDIUM' or monthly_savings > 100:
-            return Severity.MEDIUM
-        else:
-            return Severity.LOW
-    
-    def _calculate_risk_level(self, rec: Dict) -> Severity:
-        """
-        Risk of implementing this recommendation
-        Based on action type and resource criticality
-        """
-        title = rec.get('title', '').lower()
-        
-        # Deleting resources = HIGH risk (data loss potential)
-        if 'delete' in title or 'remove' in title:
-            return Severity.HIGH
-        
-        # Resizing/modifying = MEDIUM risk (downtime, performance)
-        elif 'resize' in title or 'change' in title or 'modify' in title:
-            return Severity.MEDIUM
-        
-        # Security fixes = LOW risk (no downtime)
-        else:
-            return Severity.LOW
-    
-    def _determine_difficulty(self, rec: Dict) -> str:
-        """
-        Difficulty to implement recommendation
-        """
-        title = rec.get('title', '').lower()
-        
-        if 'secure' in title or 'security' in title:
-            return 'Easy'  # Usually just config change
-        elif 'delete' in title:
-            return 'Medium'  # Requires backup, data export
-        elif 'resize' in title:
-            return 'Medium'  # Requires downtime planning
-        else:
-            return 'Hard'
-    
-    def _map_confidence(self, gcp_confidence) -> float:
-        """Map GCP confidence level to 0-1 scale"""
-        confidence_map = {
-            'P1': 0.95,
-            'P2': 0.85,
-            'P3': 0.75,
-            'P4': 0.60,
-        }
-        
-        confidence_str = str(gcp_confidence).split('.')[-1] if gcp_confidence else 'P4'
-        return confidence_map.get(confidence_str, 0.70)
-    
-    def get_cost_analysis(self) -> Dict:
-        """Get detailed cost analysis"""
-        try:
-            total_cost = self.billing_service.get_project_total_cost(days=30)
-            cost_by_service = self.billing_service.get_cost_by_service(days=30)
-            cost_trend = self.billing_service.get_cost_trend(days=90)
+            self.logger.info(
+                f"ROI for {recommendation_id}: "
+                f"${annual_savings}/year, "
+                f"payback {payback_months} months, "
+                f"ROI {roi_percentage}%"
+            )
             
-            return {
-                'total_cost': total_cost,
-                'by_service': cost_by_service,
-                'trend': cost_trend,
-                'generated_at': datetime.utcnow().isoformat()
-            }
+            return roi
+        
         except Exception as e:
-            logger.error(f"Error getting cost analysis: {e}")
+            self.logger.error(f"Error calculating ROI: {e}")
             raise
     
-    def get_recommendations_summary(self) -> Dict:
-        """Get summary of all recommendations"""
+    def calculate_total_savings(
+        self,
+        recommendations: List[Dict]
+    ) -> Dict[str, float]:
+        """
+        Calculate total savings from multiple recommendations
+        
+        Args:
+            recommendations: List of recommendation dicts with savings
+            
+        Returns:
+            {
+                'monthly_total': float,
+                'annual_total': float,
+                'highest': float,
+                'average': float,
+                'confidence_weighted': float
+            }
+        """
         try:
-            recommendations = self.analyze_infrastructure()
+            if not recommendations:
+                return {
+                    'monthly_total': 0.0,
+                    'annual_total': 0.0,
+                    'highest': 0.0,
+                    'average': 0.0,
+                    'confidence_weighted': 0.0
+                }
             
-            total_monthly_savings = sum(r.monthly_savings for r in recommendations)
-            total_annual_savings = sum(r.annual_savings for r in recommendations)
+            monthly_savings = []
+            confidences = []
             
-            by_severity = {}
-            for severity in Severity:
-                count = len([r for r in recommendations if r.severity == severity])
-                if count > 0:
-                    by_severity[severity] = count
+            for rec in recommendations:
+                monthly = rec.get('monthly_savings', 0)
+                confidence = rec.get('confidence', 0.85)
+                
+                monthly_savings.append(monthly)
+                confidences.append(confidence)
+            
+            monthly_total = sum(monthly_savings)
+            annual_total = monthly_total * 12
+            
+            # Weighted by confidence
+            confidence_weighted = sum(
+                s * c for s, c in zip(monthly_savings, confidences)
+            )
+            
+            result = {
+                'monthly_total': round(monthly_total, 2),
+                'annual_total': round(annual_total, 2),
+                'highest': round(max(monthly_savings), 2) if monthly_savings else 0.0,
+                'average': round(monthly_total / len(monthly_savings), 2) if monthly_savings else 0.0,
+                'confidence_weighted': round(confidence_weighted, 2),
+                'recommendation_count': len(recommendations),
+                'high_confidence_count': len([c for c in confidences if c >= 0.8])
+            }
+            
+            self.logger.info(
+                f"Total savings: ${result['monthly_total']}/month, "
+                f"${result['annual_total']}/year from {result['recommendation_count']} recommendations"
+            )
+            
+            return result
+        
+        except Exception as e:
+            self.logger.error(f"Error calculating total savings: {e}")
+            raise
+    
+    def calculate_payback_period(
+        self,
+        monthly_savings: float,
+        upfront_cost: float,
+        monthly_maintenance: float = 0.0
+    ) -> float:
+        """
+        Calculate payback period in months
+        
+        Args:
+            monthly_savings: Monthly savings amount
+            upfront_cost: One-time upfront cost
+            monthly_maintenance: Ongoing monthly cost
+            
+        Returns:
+            Number of months to break even
+        """
+        try:
+            if monthly_savings <= monthly_maintenance:
+                self.logger.warning("Monthly savings not greater than maintenance costs")
+                return float('inf')
+            
+            net_monthly_savings = monthly_savings - monthly_maintenance
+            
+            if net_monthly_savings <= 0:
+                return float('inf')
+            
+            payback_months = upfront_cost / net_monthly_savings
+            
+            self.logger.info(f"Payback period: {payback_months:.1f} months")
+            return round(payback_months, 1)
+        
+        except Exception as e:
+            self.logger.error(f"Error calculating payback period: {e}")
+            raise
+    
+    # ========================================================================
+    # Trend Analysis Methods
+    # ========================================================================
+    
+    def analyze_cost_trend(
+        self,
+        daily_costs: List[Dict],
+        window_days: int = 7
+    ) -> Dict[str, any]:
+        """
+        Analyze cost trends with moving average
+        
+        Args:
+            daily_costs: List of daily costs with 'date' and 'cost'
+            window_days: Moving average window
+            
+        Returns:
+            {
+                'trend': str,
+                'trend_percentage': float,
+                'moving_average': float,
+                'forecast_30_days': float,
+                'volatility': float
+            }
+        """
+        try:
+            if len(daily_costs) < window_days:
+                self.logger.warning(f"Not enough data for {window_days}-day window")
+                return {
+                    'trend': 'insufficient_data',
+                    'trend_percentage': 0.0,
+                    'moving_average': 0.0,
+                    'forecast_30_days': 0.0,
+                    'volatility': 0.0
+                }
+            
+            costs = [item['cost'] for item in daily_costs]
+            
+            # Calculate moving average
+            moving_avg = []
+            for i in range(len(costs) - window_days + 1):
+                window = costs[i:i + window_days]
+                moving_avg.append(sum(window) / window_days)
+            
+            # Determine trend
+            if len(moving_avg) >= 2:
+                first_avg = sum(moving_avg[:len(moving_avg)//2]) / (len(moving_avg)//2)
+                last_avg = sum(moving_avg[len(moving_avg)//2:]) / (len(moving_avg) - len(moving_avg)//2)
+                
+                trend_percentage = ((last_avg - first_avg) / first_avg * 100) if first_avg > 0 else 0
+                
+                if trend_percentage > 5:
+                    trend = "increasing"
+                elif trend_percentage < -5:
+                    trend = "decreasing"
+                else:
+                    trend = "stable"
+            else:
+                trend_percentage = 0.0
+                trend = "unknown"
+            
+            # Calculate volatility (standard deviation)
+            avg_cost = sum(costs) / len(costs) if costs else 0
+            variance = sum((c - avg_cost) ** 2 for c in costs) / len(costs) if costs else 0
+            volatility = (variance ** 0.5) / avg_cost * 100 if avg_cost > 0 else 0
+            
+            # Forecast 30 days
+            current_avg = moving_avg[-1] if moving_avg else 0
+            forecast_30 = current_avg * 30
+            
+            result = {
+                'trend': trend,
+                'trend_percentage': round(trend_percentage, 2),
+                'moving_average': round(current_avg, 2),
+                'forecast_30_days': round(forecast_30, 2),
+                'volatility': round(volatility, 2),
+                'confidence': self._calculate_confidence(len(daily_costs))
+            }
+            
+            self.logger.info(f"Cost trend: {trend} ({trend_percentage:.1f}%)")
+            return result
+        
+        except Exception as e:
+            self.logger.error(f"Error analyzing cost trend: {e}")
+            raise
+    
+    # ========================================================================
+    # Utility Methods
+    # ========================================================================
+    
+    def _calculate_confidence(self, data_points: int) -> str:
+        """
+        Calculate confidence level based on data points
+        
+        Args:
+            data_points: Number of data points available
+            
+        Returns:
+            Confidence level: "low", "medium", or "high"
+        """
+        if data_points >= 30:
+            return "high"
+        elif data_points >= 14:
+            return "medium"
+        else:
+            return "low"
+    
+    def prioritize_recommendations(
+        self,
+        recommendations: List[Dict]
+    ) -> List[Dict]:
+        """
+        Prioritize recommendations by ROI and implementation difficulty
+        
+        Args:
+            recommendations: List of recommendation dicts
+            
+        Returns:
+            Sorted list prioritized by ROI (adjusted for difficulty)
+        """
+        try:
+            scored_recs = []
+            
+            for rec in recommendations:
+                monthly_savings = rec.get('monthly_savings', 0)
+                difficulty_map = {'Easy': 3, 'Medium': 2, 'Hard': 1}
+                difficulty = difficulty_map.get(rec.get('difficulty', 'Medium'), 2)
+                confidence = rec.get('confidence', 0.85)
+                
+                # Score = (savings * difficulty * confidence) for prioritization
+                score = monthly_savings * difficulty * confidence
+                
+                scored_recs.append({
+                    **rec,
+                    'priority_score': round(score, 2)
+                })
+            
+            # Sort by priority score (highest first)
+            scored_recs.sort(key=lambda x: x['priority_score'], reverse=True)
+            
+            self.logger.info(f"Prioritized {len(scored_recs)} recommendations")
+            return scored_recs
+        
+        except Exception as e:
+            self.logger.error(f"Error prioritizing recommendations: {e}")
+            raise
+    
+    def estimate_implementation_time(
+        self,
+        difficulty: str,
+        resource_count: int = 1
+    ) -> Dict[str, int]:
+        """
+        Estimate implementation time based on difficulty
+        
+        Args:
+            difficulty: Implementation difficulty (Easy/Medium/Hard)
+            resource_count: Number of resources to modify
+            
+        Returns:
+            {
+                'hours': int,
+                'business_days': int,
+                'calendar_days': int
+            }
+        """
+        try:
+            time_estimates = {
+                'Easy': {'hours': 1, 'per_resource': 0.5},
+                'Medium': {'hours': 4, 'per_resource': 2},
+                'Hard': {'hours': 16, 'per_resource': 8}
+            }
+            
+            estimate = time_estimates.get(difficulty, time_estimates['Medium'])
+            total_hours = estimate['hours'] + (estimate['per_resource'] * max(0, resource_count - 1))
             
             return {
-                'total_recommendations': len(recommendations),
-                'total_monthly_savings': round(total_monthly_savings, 2),
-                'total_annual_savings': round(total_annual_savings, 2),
-                'by_severity': by_severity,
-                'recommendations': [r.dict() for r in recommendations],
-                'generated_at': datetime.utcnow().isoformat()
+                'hours': int(total_hours),
+                'business_days': int((total_hours / 8) + 1),  # 8 hour workday + buffer
+                'calendar_days': int((total_hours / 6) + 1)   # 6 hour work blocks
             }
+        
         except Exception as e:
-            logger.error(f"Error generating summary: {e}")
+            self.logger.error(f"Error estimating implementation time: {e}")
             raise
+
+
+# Usage examples:
+# from backend.utils.cost_calculator import CostCalculator
+#
+# calculator = CostCalculator()
+#
+# # Calculate breakdown
+# breakdown = calculator.calculate_cost_breakdown(costs_by_service)
+#
+# # Calculate ROI
+# roi = calculator.calculate_roi(
+#     recommendation_id="rec_123",
+#     monthly_savings=500,
+#     implementation_cost=2000
+# )
+#
+# # Analyze trend
+# trend = calculator.analyze_cost_trend(daily_costs)
+#
+# # Prioritize recommendations
+# prioritized = calculator.prioritize_recommendations(recommendations)

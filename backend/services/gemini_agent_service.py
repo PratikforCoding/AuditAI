@@ -271,7 +271,7 @@ Analyze the infrastructure for the last {days} days and provide detailed insight
             
             # First API call to Gemini
             response = self.client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=messages,
                 tools=self.tools,
                 system_prompt=system_prompt,
@@ -325,7 +325,7 @@ Analyze the infrastructure for the last {days} days and provide detailed insight
                 
                 # Make another API call to continue the conversation
                 response = self.client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-2.5-flash",
                     contents=messages,
                     tools=self.tools,
                     system_prompt=system_prompt,
@@ -391,7 +391,7 @@ For each suggestion:
 """
             
             response = self.client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
             
@@ -441,7 +441,7 @@ Include:
 """
             
             response = self.client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
             
