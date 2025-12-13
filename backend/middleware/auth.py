@@ -1,45 +1,77 @@
 """
-Authentication middleware
-Validates JWT tokens and extracts user information
+Authentication Service - JWT + Password Hashing
+FIXED for Pydantic v2 and bcrypt
 """
 
-import logging
-from typing import Optional
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
-import jwt
 from datetime import datetime, timedelta
+from typing import Dict, Optional
+import jwt
+import logging
+from passlib.context import CryptContext
+
 from backend.config.settings import settings
-from backend.utils.logger import get_logger
-from backend.utils.encryption import CredentialEncryption
 
-logger = get_logger(__name__)
-security = HTTPBearer()
+logger = logging.getLogger(__name__)
+
+# Bcrypt context for secure password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-class JWTHandler:
-    """Handle JWT token creation and validation"""
+class AuthService:
+    """Authentication service for JWT and password management"""
+    
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """
+        Hash password using bcrypt (secure)
+        
+        Args:
+            password: Plain text password
+        
+        Returns:
+            Hashed password
+        """
+        return pwd_context.hash(password)
+    
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """
+        Verify password against bcrypt hash
+        
+        Args:
+            plain_password: Plain text password
+            hashed_password: Hashed password from database
+        
+        Returns:
+            True if password matches
+        """
+        return pwd_context.verify(plain_password, hashed_password)
     
     @staticmethod
     def create_access_token(
-        subject: str,
+        data: dict,
         expires_delta: Optional[timedelta] = None
     ) -> str:
         """
         Create JWT access token
         
         Args:
-            subject: User ID to encode in token
+            data: Data to encode (must include 'sub' and 'user_id')
             expires_delta: Token expiration time
         
         Returns:
-            Encoded JWT token
+            JWT token string
         """
-        if expires_delta is None:
-            expires_delta = timedelta(hours=24)
+        to_encode = data.copy()
         
-        expire = datetime.utcnow() + expires_delta
-        to_encode = {"sub": subject, "exp": expire}
+        if expires_delta:
+            expire = datetime.utcnow() + expires_delta
+        else:
+            expire = datetime.utcnow() + timedelta(
+                hours=settings.ACCESS_TOKEN_EXPIRE_HOURS
+            )
+        
+        to_encode.update({"exp": expire, "iat": datetime.utcnow()})
         
         try:
             encoded_jwt = jwt.encode(
@@ -47,22 +79,26 @@ class JWTHandler:
                 settings.SECRET_KEY,
                 algorithm=settings.ALGORITHM
             )
-            logger.info(f"JWT token created for user: {subject}")
+            logger.info(f"✅ JWT token created for user: {data.get('user_id')}")
             return encoded_jwt
         except Exception as e:
-            logger.error(f"Failed to create JWT token: {str(e)}")
+            logger.error(f"❌ Failed to create JWT token: {e}")
             raise
-
+    
     @staticmethod
-    def verify_token(token: str) -> str:
+    def verify_token(token: str) -> Dict:
         """
-        Verify JWT token and extract user_id
+        Verify JWT token and return payload
         
         Args:
             token: JWT token string
         
         Returns:
-            User ID from token
+            Decoded token payload with user_id and email
+        
+        Raises:
+            jwt.ExpiredSignatureError: Token expired
+            jwt.InvalidTokenError: Invalid token
         """
         try:
             payload = jwt.decode(
@@ -70,98 +106,17 @@ class JWTHandler:
                 settings.SECRET_KEY,
                 algorithms=[settings.ALGORITHM]
             )
-            user_id = payload.get("sub")
             
+            user_id = payload.get("user_id")
             if not user_id:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid token: no user_id"
-                )
+                raise jwt.InvalidTokenError("Token missing user_id")
             
-            logger.info(f"Token verified for user: {user_id}")
-            return user_id
+            logger.info(f"✅ Token verified for user: {user_id}")
+            return payload
         
         except jwt.ExpiredSignatureError:
-            logger.warning("Token has expired")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has expired"
-            )
+            logger.warning("⚠️ Token has expired")
+            raise
         except jwt.InvalidTokenError as e:
-            logger.error(f"Invalid token: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-
-
-async def get_current_user(
-    credentials: HTTPAuthCredentials = Depends(security)
-) -> str:
-    """
-    Extract and validate user from JWT token
-    Used as dependency in protected endpoints
-    
-    Args:
-        credentials: HTTP Bearer token
-    
-    Returns:
-        User ID
-    """
-    try:
-        token = credentials.credentials
-        user_id = JWTHandler.verify_token(token)
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed"
-        )
-
-
-async def get_user_gcp_credentials(
-    user_id: str = Depends(get_current_user)
-) -> dict:
-    """
-    Get decrypted GCP credentials for authenticated user
-    
-    Args:
-        user_id: Current authenticated user
-    
-    Returns:
-        Decrypted GCP credentials
-    """
-    try:
-        from backend.models.database import db
-        
-        user = db.User.find_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        if not user.get('gcp_credentials'):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User hasn't configured GCP credentials yet"
-            )
-        
-        encryptor = CredentialEncryption()
-        credentials = encryptor.decrypt(user['gcp_credentials'])
-        
-        logger.info(f"GCP credentials retrieved for user: {user_id}")
-        return credentials
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to retrieve credentials for {user_id}: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve credentials"
-        )
+            logger.error(f"❌ Invalid token: {e}")
+            raise

@@ -1,76 +1,104 @@
 """
-Application settings and environment variables
+Application settings and configuration
+Updated with MongoDB Atlas configuration
+FIXED for Pydantic v2
 """
 
-import os
-from typing import Optional
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import ConfigDict
+from typing import Optional
 
 
 class Settings(BaseSettings):
-    """
-    Application settings loaded from environment variables
-    """
+    """Application settings"""
+    
+    # ===== Pydantic v2 Configuration =====
+    model_config = ConfigDict(
+        extra='ignore',              # ✅ Ignores frontend vars (NEXT_PUBLIC_*, etc)
+        env_file='.env.local',       # ✅ Loads .env.local automatically
+        env_ignore_empty=True,       # ✅ Ignores empty environment variables
+        case_sensitive=False         # ✅ Flexible with env var names
+    )
+    
+    # ===== Environment =====
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
     
     # ===== Application =====
     APP_NAME: str = "AuditAI"
-    APP_VERSION: str = "2.0.0"
-    ENVIRONMENT: str = Field(default="development", description="Environment: development, staging, production")
-    DEBUG: bool = Field(default=False, description="Debug mode")
+    APP_VERSION: str = "1.0.0"
+    API_PREFIX: str = "/api/v1"
     
     # ===== Server =====
-    HOST: str = Field(default="0.0.0.0", description="Server host")
-    PORT: int = Field(default=8000, description="Server port")
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    FRONTEND_URL: str = "http://localhost:3000"
     
-    # ===== GCP =====
-    GOOGLE_PROJECT_ID: str = Field(default="", description="GCP Project ID")
-    GOOGLE_API_KEY: str = Field(default="", description="Google API Key")
-    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = Field(default=None, description="Path to service account JSON")
+    # ===== Security =====
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    ENCRYPTION_KEY: str
     
-    # ===== Gemini AI =====
-    GEMINI_MODEL: str = Field(default="gemini-2.0-flash", description="Gemini model to use")
-    GEMINI_TEMPERATURE: float = Field(default=0.7, description="Temperature for generation")
+    # ===== MongoDB Atlas Configuration =====
+    MONGODB_URL: str
+    DATABASE_NAME: str = "auditai"
     
-    # ===== Database (MongoDB) =====
-    MONGODB_URL: str = Field(default="mongodb://localhost:27017", description="MongoDB connection string")
-    DATABASE_NAME: str = Field(default="auditai", description="Database name")
-    USERS_COLLECTION: str = Field(default="users", description="Users collection name")
-    ANALYSES_COLLECTION: str = Field(default="user_analyses", description="Analyses collection name")
-    REPORTS_COLLECTION: str = Field(default="audit_reports", description="Reports collection name")
+    # MongoDB Collection Names
+    USERS_COLLECTION: str = "users"
+    ANALYSES_COLLECTION: str = "user_analyses"
+    REPORTS_COLLECTION: str = "audit_reports"
+    COST_ANALYSES_COLLECTION: str = "cost_analyses"
+    SUBSCRIPTIONS_COLLECTION: str = "subscriptions"
     
-    # ===== Authentication & Security =====
-    SECRET_KEY: str = Field(default="", description="JWT secret key")
-    ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
-    ACCESS_TOKEN_EXPIRE_HOURS: int = Field(default=24, description="Token expiration hours")
+    # ===== GCP Configuration =====
+    GOOGLE_PROJECT_ID: str = ""
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     
-    # ===== Encryption =====
-    ENCRYPTION_KEY: str = Field(default="", description="Fernet encryption key for credentials")
+    # ===== Gemini AI Configuration =====
+    GEMINI_MODEL: str = "gemini-2.0-flash-exp"
+    GEMINI_TEMPERATURE: float = 0.7
     
-    # ===== Frontend =====
-    FRONTEND_URL: str = Field(default="http://localhost:3000", description="Frontend URL for CORS")
+    # ===== Feature Flags =====
+    ENABLE_ANALYSIS_CACHING: bool = True
+    ANALYSIS_CACHE_TTL: int = 3600  # 1 hour
+    
+    # ===== Rate Limiting =====
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW: int = 60  # seconds
     
     # ===== Logging =====
-    LOG_LEVEL: str = Field(default="INFO", description="Logging level")
-    LOG_FILE: str = Field(default="logs/auditai.log", description="Log file path")
-    ERROR_LOG_FILE: str = Field(default="logs/error.log", description="Error log file path")
+    LOG_FILE: str = "logs/app.log"
     
-    # ===== API Rate Limiting =====
-    RATE_LIMIT_ENABLED: bool = Field(default=True, description="Enable rate limiting")
-    RATE_LIMIT_REQUESTS: int = Field(default=100, description="Requests per minute")
+    # ===== Helper Methods =====
     
-    class Config:
-        env_file = ".env.local"
-        case_sensitive = True
-        extra = "ignore"
+    def is_production(self) -> bool:
+        """Check if running in production"""
+        return self.ENVIRONMENT.lower() == "production"
+    
+    def get_mongodb_connection_string(self) -> str:
+        """Get MongoDB connection string"""
+        return self.MONGODB_URL
+    
+    def validate_mongodb_config(self) -> bool:
+        """Validate MongoDB configuration"""
+        if not self.MONGODB_URL:
+            raise ValueError("MONGODB_URL not configured in .env.local")
+        if not self.DATABASE_NAME:
+            raise ValueError("DATABASE_NAME not configured in .env.local")
+        return True
+    
+    def validate_secrets(self) -> bool:
+        """Validate critical secrets"""
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY not configured in .env.local")
+        if not self.ENCRYPTION_KEY:
+            raise ValueError("ENCRYPTION_KEY not configured in .env.local")
+        return True
 
 
-# Create settings instance
+# Global settings instance
 settings = Settings()
-
-# Validate critical settings in production
-if settings.ENVIRONMENT == "production":
-    assert settings.SECRET_KEY, "SECRET_KEY must be set in production"
-    assert settings.ENCRYPTION_KEY, "ENCRYPTION_KEY must be set in production"
-    assert settings.GOOGLE_PROJECT_ID, "GOOGLE_PROJECT_ID must be set in production"
-    assert settings.GOOGLE_API_KEY, "GOOGLE_API_KEY must be set in production"

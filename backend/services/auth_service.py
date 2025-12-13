@@ -122,4 +122,3 @@ class AuthService:
         """
 
         return self.hash_password(plain_password) == hashed_password
-
