@@ -1,5 +1,7 @@
 """
 Gemini Agent Service - Agentic AI for Infrastructure Analysis
+COMPLETE VERSION - All features included
+FIXED: Updated to use correct Gemini API (no Client class)
 UPDATED: Supports per-user credentials
 """
 
@@ -7,22 +9,24 @@ import json
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-import google.generativeai as genai  # ✅ FIXED IMPORT
+import google.generativeai as genai
 from backend.config.settings import settings
 from backend.services.recommendation_engine import ProductionRecommendationEngine
 from backend.services.gcp_billing_service import GCPBillingService
 from backend.services.gcp_monitoring_service import GCPMonitoringService
 from backend.services.gcp_recommender_service import GCPRecommenderService
 from backend.utils.logger import get_logger
+from backend.services.gemini_client_with_fallback import GeminiClientWithFallback
 
 logger = get_logger(__name__)
 
 
 class GeminiAgentService:
     """
-    Agentic AI service using Google Gemini with tool use capabilities.
+    Agentic AI service using Google Gemini with comprehensive features.
     Can autonomously analyze infrastructure and make recommendations.
     UPDATED: Supports per-user GCP credentials
+    FIXED: Uses correct Gemini API without Client class
     """
 
     def __init__(self, project_id: str, user_credentials: Optional[Dict] = None):
@@ -36,9 +40,16 @@ class GeminiAgentService:
         """
         self.project_id = project_id
         self.user_credentials = user_credentials
-        self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
         
-        # Initialize services with user credentials
+        # ✅ FIXED: Configure Gemini API correctly (no Client class)
+        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        
+        self.gemini_client = GeminiClientWithFallback()
+        self.model = self.gemini_client.model
+        
+        logger.info("✅ Gemini model initialized: gemini-2.5-flash")
+        
+        # Initialize GCP services with user credentials
         self.recommendation_engine = ProductionRecommendationEngine(
             project_id, 
             user_credentials
@@ -47,13 +58,13 @@ class GeminiAgentService:
         self.monitoring_service = GCPMonitoringService(project_id, user_credentials)
         self.recommender_service = GCPRecommenderService(project_id, user_credentials)
         
-        # Define tools for Gemini to use
+        # Tool definitions for documentation/logging purposes
         self.tools = self._define_tools()
 
     def _define_tools(self) -> List[Dict[str, Any]]:
         """
-        Define tools that Gemini can autonomously call.
-        These are the "actions" the AI agent can take.
+        Define tools that the AI agent uses.
+        These are for documentation and logging purposes.
         """
         return [
             {
@@ -130,10 +141,10 @@ class GeminiAgentService:
             }
         ]
 
-    def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> str:
+    def _execute_tool(self, tool_name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute a tool call made by Gemini AI.
-        Returns JSON string result.
+        Execute a tool call internally.
+        Returns structured data (not JSON string).
         """
         try:
             logger.info(f"Executing tool: {tool_name} with input: {tool_input}")
@@ -142,37 +153,35 @@ class GeminiAgentService:
                 days = tool_input.get("days", 30)
                 try:
                     result = self.billing_service.get_cost_by_service(days=days)
+                    logger.info(f"✅ Cost analysis: {len(result)} services found")
                 except Exception as e:
-                    logger.error(f"Cost analysis failed: {e}")
+                    logger.error(f"❌ Cost analysis failed: {e}")
                     result = {"error": str(e), "message": "Cost analysis not available"}
                 
-                return json.dumps({
+                return {
                     "status": "success",
                     "data": result,
                     "tool": tool_name
-                })
+                }
             
             elif tool_name == "get_resource_metrics":
-                # ✅ FIXED: Wrapped in try-except
                 try:
                     resource_type = tool_input.get("resource_type")
                     metric_type = tool_input.get("metric_type", "cpu")
                     
-                    # Note: This requires instance_id and zone
-                    # For now, return a placeholder
-                    result = {
-                        "message": "Metrics endpoint requires specific instance details",
-                        "available": False
-                    }
+                    # Get all instances metrics
+                    result = self.monitoring_service.get_all_instances_metrics(hours=24)
+                    logger.info(f"✅ Metrics fetched: {len(result)} instances")
                 except Exception as e:
-                    result = {"error": str(e)}
+                    logger.error(f"❌ Metrics failed: {e}")
+                    result = {"error": str(e), "message": "Metrics not available"}
                 
-                return json.dumps({
+                return {
                     "status": "success",
                     "data": result,
                     "tool": tool_name,
                     "metric_type": metric_type
-                })
+                }
             
             elif tool_name == "get_recommendations":
                 rec_type = tool_input.get("recommendation_type", "ALL")
@@ -186,31 +195,33 @@ class GeminiAgentService:
                         result = self.recommender_service.get_storage_recommendations()
                     else:
                         result = self.recommender_service.get_all_recommendations()
+                    
+                    logger.info(f"✅ Recommendations fetched: {len(result)}")
                 except Exception as e:
-                    logger.error(f"Recommendations failed: {e}")
+                    logger.error(f"❌ Recommendations failed: {e}")
                     result = {"error": str(e), "message": "Recommendations not available"}
                 
-                return json.dumps({
+                return {
                     "status": "success",
                     "data": result,
                     "tool": tool_name,
                     "recommendation_type": rec_type
-                })
+                }
             
             elif tool_name == "analyze_infrastructure":
                 days = tool_input.get("days", 30)
                 try:
-                    # ✅ FIXED: Removed project_id parameter
                     result = self.recommendation_engine.analyze_infrastructure(days=days)
+                    logger.info(f"✅ Infrastructure analyzed: {len(result)} recommendations")
                 except Exception as e:
-                    logger.error(f"Infrastructure analysis failed: {e}")
+                    logger.error(f"❌ Infrastructure analysis failed: {e}")
                     result = {"error": str(e), "message": "Analysis not available"}
                 
-                return json.dumps({
+                return {
                     "status": "success",
                     "data": result,
                     "tool": tool_name
-                })
+                }
             
             elif tool_name == "calculate_savings":
                 rec_id = tool_input.get("recommendation_id")
@@ -221,25 +232,81 @@ class GeminiAgentService:
                     "implementation_effort": "Low",
                     "roi_months": 1
                 }
-                return json.dumps({
+                return {
                     "status": "success",
                     "data": result,
                     "tool": tool_name
-                })
+                }
             
             else:
-                return json.dumps({
+                return {
                     "status": "error",
                     "message": f"Unknown tool: {tool_name}"
-                })
+                }
         
         except Exception as e:
-            logger.error(f"Tool execution failed: {str(e)}")
-            return json.dumps({
+            logger.error(f"❌ Tool execution failed: {str(e)}")
+            return {
                 "status": "error",
                 "message": str(e),
                 "tool": tool_name
-            })
+            }
+
+    def _gather_all_data(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Gather data from all available sources.
+        Returns comprehensive infrastructure data.
+        """
+        logger.info("📊 Gathering comprehensive infrastructure data...")
+        
+        data = {
+            "project_id": self.project_id,
+            "analysis_period_days": days,
+            "cost_analysis": None,
+            "recommendations": None,
+            "infrastructure_analysis": None,
+            "resource_metrics": None,
+            "gathered_at": datetime.utcnow().isoformat()
+        }
+        
+        # Get cost analysis
+        try:
+            cost_result = self._execute_tool("get_cost_analysis", {"days": days})
+            data["cost_analysis"] = cost_result.get("data")
+            logger.info("✅ Cost analysis gathered")
+        except Exception as e:
+            logger.warning(f"⚠️ Cost analysis failed: {e}")
+            data["cost_analysis"] = {"error": str(e)}
+        
+        # Get recommendations
+        try:
+            rec_result = self._execute_tool("get_recommendations", {"recommendation_type": "ALL"})
+            data["recommendations"] = rec_result.get("data")
+            logger.info("✅ Recommendations gathered")
+        except Exception as e:
+            logger.warning(f"⚠️ Recommendations failed: {e}")
+            data["recommendations"] = {"error": str(e)}
+        
+        # Get infrastructure analysis
+        try:
+            infra_result = self._execute_tool("analyze_infrastructure", {"days": days})
+            data["infrastructure_analysis"] = infra_result.get("data")
+            logger.info("✅ Infrastructure analysis gathered")
+        except Exception as e:
+            logger.warning(f"⚠️ Infrastructure analysis failed: {e}")
+            data["infrastructure_analysis"] = {"error": str(e)}
+        
+        # Get resource metrics
+        try:
+            metrics_result = self._execute_tool("get_resource_metrics", {})
+            data["resource_metrics"] = metrics_result.get("data")
+            logger.info("✅ Resource metrics gathered")
+        except Exception as e:
+            logger.warning(f"⚠️ Resource metrics failed: {e}")
+            data["resource_metrics"] = {"error": str(e)}
+        
+        logger.info("📊 Data gathering complete")
+        return data
 
     def analyze_infrastructure_interactively(
         self, 
@@ -248,131 +315,110 @@ class GeminiAgentService:
     ) -> Dict[str, Any]:
         """
         Run interactive infrastructure analysis with AI agent.
-        The AI will autonomously call tools to gather data and answer the query.
+        
+        This method:
+        1. Gathers comprehensive data from all GCP services
+        2. Sends it to Gemini AI with the user's query
+        3. Returns AI-generated insights and recommendations
         """
         try:
-            logger.info(f"Starting interactive analysis for query: {query}")
+            logger.info(f"🤖 Starting interactive analysis for query: {query}")
             
+            # Step 1: Gather all infrastructure data
+            all_data = self._gather_all_data(days=days)
+            
+            # Step 2: Build comprehensive prompt
             system_prompt = f"""You are an expert GCP infrastructure auditor and cost optimization specialist.
 
 Your goal is to help users optimize their Google Cloud Platform infrastructure and reduce costs.
 
-You have access to tools that can:
-- Get cost breakdowns by service
-- Fetch resource utilization metrics
-- Get official GCP Recommender suggestions
-- Analyze infrastructure comprehensively
-- Calculate cost savings
+PROJECT ID: {self.project_id}
+ANALYSIS PERIOD: Last {days} days
 
-Project ID: {self.project_id}
-Analysis Period: Last {days} days
+You have access to comprehensive infrastructure data including:
+- Cost analysis by service
+- Official GCP Recommender suggestions
+- Resource utilization metrics
+- Infrastructure analysis with recommendations
 
-Available tools:
-- get_cost_analysis: Get cost breakdown by service
-- get_resource_metrics: Get resource utilization metrics
-- get_recommendations: Get GCP Recommender suggestions
-- analyze_infrastructure: Run full infrastructure analysis
-- calculate_savings: Calculate potential cost savings
-
-Use tools strategically to answer the user's question completely.
+Provide specific, actionable advice based on the actual data provided.
 """
 
-            messages = [
-                {
-                    "role": "user",
-                    "content": f"""Please analyze my GCP infrastructure and help me with this:
+            user_prompt = f"""
+USER QUERY: {query}
 
-{query}
+=== COMPREHENSIVE INFRASTRUCTURE DATA ===
 
-Analyze the infrastructure for the last {days} days and provide detailed insights."""
-                }
-            ]
+{json.dumps(all_data, indent=2, default=str)}
+
+===
+
+Based on the above real data from the user's GCP project, provide a comprehensive answer to their query.
+
+Your response should:
+1. Directly answer their specific question
+2. Provide concrete, actionable recommendations
+3. Include actual cost numbers and savings estimates from the data
+4. Prioritize quick wins vs long-term improvements
+5. Reference specific resources or services from their data
+6. Be detailed but well-organized
+
+Format your response with clear sections and use markdown formatting.
+"""
             
-            # First API call to Gemini
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=messages,
-                tools=self.tools,
-                system_prompt=system_prompt,
+            # Step 3: Call Gemini AI
+            logger.info("🤖 Calling Gemini AI for analysis...")
+            
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            
+            response = self.model.generate_content(
+                full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    top_p=0.95,
+                    top_k=40,
+                    max_output_tokens=2048,
+                ),
             )
             
-            # Process tool use loop
-            tool_results = []
-            max_iterations = 5  # Prevent infinite loops
-            iteration = 0
+            analysis_text = response.text
+            logger.info("✅ Gemini analysis completed")
             
-            while iteration < max_iterations and response.candidates[0].content.parts:
-                # Check if there are tool calls
-                has_tool_calls = any(
-                    hasattr(part, 'function_call') 
-                    for part in response.candidates[0].content.parts
-                )
-                
-                if not has_tool_calls:
-                    break
-                
-                # Process each part
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'function_call'):
-                        tool_call = part.function_call
-                        tool_name = tool_call.name
-                        tool_input = dict(tool_call.args)
-                        
-                        logger.info(f"AI called tool: {tool_name}")
-                        
-                        # Execute the tool
-                        tool_result = self._execute_tool(tool_name, tool_input)
-                        tool_results.append({
-                            "tool": tool_name,
-                            "input": tool_input,
-                            "result": json.loads(tool_result)
-                        })
-                        
-                        # Add tool result to messages for next API call
-                        messages.append({
-                            "role": "model",
-                            "content": response.candidates[0].content
-                        })
-                        
-                        messages.append({
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_name,
-                                    "result": tool_result
-                                }
-                            ]
-                        })
-                
-                # Make another API call to continue the conversation
-                response = self.client.models.generate_content(
-                    model="gemini-2.0-flash-exp",
-                    contents=messages,
-                    tools=self.tools,
-                    system_prompt=system_prompt,
-                )
-                
-                iteration += 1
-            
-            # Extract final response
-            final_response = ""
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'text'):
-                    final_response = part.text
-                    break
+            # Step 4: Build tool_calls summary
+            tool_calls = [
+                {
+                    "tool": "get_cost_analysis",
+                    "status": "success" if all_data.get("cost_analysis") and "error" not in str(all_data.get("cost_analysis")) else "failed",
+                    "data_summary": f"{len(all_data.get('cost_analysis', []))} services" if isinstance(all_data.get("cost_analysis"), list) else "unavailable"
+                },
+                {
+                    "tool": "get_recommendations",
+                    "status": "success" if all_data.get("recommendations") and "error" not in str(all_data.get("recommendations")) else "failed",
+                    "data_summary": f"{len(all_data.get('recommendations', []))} recommendations" if isinstance(all_data.get("recommendations"), list) else "unavailable"
+                },
+                {
+                    "tool": "analyze_infrastructure",
+                    "status": "success" if all_data.get("infrastructure_analysis") and "error" not in str(all_data.get("infrastructure_analysis")) else "failed",
+                    "data_summary": f"{len(all_data.get('infrastructure_analysis', []))} items" if isinstance(all_data.get("infrastructure_analysis"), list) else "unavailable"
+                },
+                {
+                    "tool": "get_resource_metrics",
+                    "status": "success" if all_data.get("resource_metrics") and "error" not in str(all_data.get("resource_metrics")) else "failed",
+                    "data_summary": f"{len(all_data.get('resource_metrics', []))} resources" if isinstance(all_data.get("resource_metrics"), list) else "unavailable"
+                }
+            ]
             
             return {
                 "status": "success",
                 "query": query,
-                "analysis": final_response,
-                "tool_calls": tool_results,
+                "analysis": analysis_text,
+                "tool_calls": tool_calls,
                 "project_id": self.project_id,
                 "days_analyzed": days
             }
         
         except Exception as e:
-            logger.error(f"Interactive analysis failed: {str(e)}")
+            logger.error(f"❌ Interactive analysis failed: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e),
@@ -385,41 +431,44 @@ Analyze the infrastructure for the last {days} days and provide detailed insight
         Uses all available tools to generate suggestions.
         """
         try:
-            logger.info("Generating optimization suggestions")
+            logger.info("💡 Generating optimization suggestions")
             
-            # Get all relevant data
-            try:
-                cost_data = self.billing_service.get_cost_by_service(days=30)
-            except:
-                cost_data = {"error": "Cost data not available"}
+            # Gather all data
+            all_data = self._gather_all_data(days=30)
             
-            try:
-                recommendations = self.recommender_service.get_all_recommendations()
-            except:
-                recommendations = []
-            
-            # Ask AI to generate suggestions based on data
+            # Build prompt for suggestions
             prompt = f"""
-Based on the following infrastructure analysis, provide 5 specific optimization suggestions
-that could reduce costs by 30-50%:
+Based on the following comprehensive GCP infrastructure analysis, provide 5 specific optimization suggestions
+that could reduce costs by 30-50%.
 
-Cost Analysis (Last 30 days):
-{json.dumps(cost_data, indent=2)}
+PROJECT: {self.project_id}
 
-GCP Recommendations:
-{json.dumps(recommendations, indent=2)}
+=== INFRASTRUCTURE DATA ===
+{json.dumps(all_data, indent=2, default=str)}
 
-For each suggestion:
-1. What to change
-2. Why it saves money
-3. How much it can save
-4. Implementation difficulty (Easy/Medium/Hard)
-5. Estimated implementation time
+===
+
+For EACH of the 5 suggestions, provide:
+
+**Suggestion [N]: [Title]**
+- **Action**: What to change (be specific with resource names/IDs)
+- **Savings**: Expected monthly and annual savings
+- **Difficulty**: Easy/Medium/Hard
+- **Time**: How long to implement
+- **Risk**: Low/Medium/High
+- **ROI**: When you'll break even
+- **Steps**: 3-5 specific implementation steps
+
+Prioritize by impact and ease of implementation.
+Use actual numbers from the data provided.
 """
             
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=prompt,
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.5,
+                    max_output_tokens=2048,
+                ),
             )
             
             suggestions_text = response.text
@@ -428,11 +477,11 @@ For each suggestion:
                 "status": "success",
                 "suggestions": suggestions_text,
                 "project_id": self.project_id,
-                "data_sources": ["billing", "recommender", "monitoring"]
+                "data_sources": ["billing", "recommender", "monitoring", "infrastructure_analysis"]
             }
         
         except Exception as e:
-            logger.error(f"Failed to generate suggestions: {str(e)}")
+            logger.error(f"❌ Failed to generate suggestions: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e)
@@ -443,34 +492,108 @@ For each suggestion:
         Generate comprehensive audit report using AI analysis.
         """
         try:
-            logger.info(f"Generating audit report for {days} days")
+            logger.info(f"📄 Generating audit report for {days} days")
             
-            # Get comprehensive analysis
-            try:
-                analysis_result = self.recommendation_engine.analyze_infrastructure(days=days)
-            except Exception as e:
-                logger.error(f"Analysis failed: {e}")
-                analysis_result = {"error": str(e)}
+            # Gather comprehensive data
+            all_data = self._gather_all_data(days=days)
             
-            # Ask AI to generate report
+            # Build comprehensive report prompt
             prompt = f"""
-Generate a professional infrastructure audit report based on this analysis:
+Generate a professional infrastructure audit report for this GCP project.
 
-{json.dumps(analysis_result, indent=2)}
+PROJECT: {self.project_id}
+PERIOD: Last {days} days
 
-Include:
-1. Executive Summary
-2. Key Findings
-3. Cost Breakdown
-4. Top 5 Recommendations with ROI
-5. Risk Assessment
-6. Implementation Timeline
-7. Expected Cost Savings
+=== COMPREHENSIVE INFRASTRUCTURE DATA ===
+{json.dumps(all_data, indent=2, default=str)}
+
+===
+
+Generate a comprehensive audit report with these sections:
+
+# Infrastructure Audit Report
+
+## Executive Summary
+(2-3 paragraphs summarizing: current state, key findings, total potential savings, priority actions)
+
+## Current Infrastructure Overview
+- **Total Monthly Cost**: $X
+- **Total Resources**: N compute instances, M storage buckets, etc.
+- **Top 3 Cost Drivers**: List with percentages
+
+## Key Findings
+(5-7 bullet points of most critical discoveries with specific numbers)
+
+## Cost Analysis
+
+### Current Spending Breakdown
+(Table or list of costs by service)
+
+### Spending Trends
+(Analysis of cost trends and projections)
+
+## Optimization Opportunities
+
+### 🚀 Quick Wins (< 1 week)
+1. **[Specific action]** - Save $X/month
+   - Details and implementation steps
+2. [...]
+
+### 📈 Medium-term (1-4 weeks)
+1. **[Specific action]** - Save $X/month
+   - Details and implementation steps
+2. [...]
+
+### 🎯 Strategic (1-3 months)
+1. **[Specific action]** - Save $X/month
+   - Details and implementation steps
+2. [...]
+
+## Expected Impact Summary
+- **Total Potential Monthly Savings**: $X
+- **Total Potential Annual Savings**: $Y
+- **Implementation Effort**: Z hours
+- **ROI Timeline**: N months
+
+## Risk Assessment
+- **Low Risk Changes**: [List]
+- **Medium Risk Changes**: [List with mitigation]
+- **High Risk Changes**: [List with detailed mitigation]
+
+## Implementation Roadmap
+
+### Phase 1 (Week 1-2)
+- [ ] Task 1
+- [ ] Task 2
+
+### Phase 2 (Week 3-4)
+- [ ] Task 1
+- [ ] Task 2
+
+### Phase 3 (Month 2-3)
+- [ ] Task 1
+- [ ] Task 2
+
+## Recommended Next Steps
+1. [Immediate action]
+2. [Follow-up action]
+3. [Long-term planning]
+
+## Conclusion
+(Summary paragraph with key takeaway and call to action)
+
+---
+Report generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
+
+Format professionally with markdown. Use specific numbers from the actual data. Be actionable.
 """
             
-            response = self.client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=prompt,
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.6,
+                    max_output_tokens=3072,
+                ),
             )
             
             report_text = response.text
@@ -484,7 +607,80 @@ Include:
             }
         
         except Exception as e:
-            logger.error(f"Failed to generate report: {str(e)}")
+            logger.error(f"❌ Failed to generate report: {str(e)}")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
+    def explain_recommendation(self, recommendation: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Provide detailed explanation for a specific recommendation.
+        
+        Args:
+            recommendation: Dictionary containing recommendation details
+        
+        Returns:
+            Detailed explanation and implementation guide
+        """
+        try:
+            logger.info("📖 Generating recommendation explanation")
+            
+            prompt = f"""
+Provide a detailed explanation for the following GCP optimization recommendation:
+
+{json.dumps(recommendation, indent=2)}
+
+Include:
+
+## Overview
+What is this recommendation and why is it important?
+
+## Current Impact
+What problems or costs is this causing right now?
+
+## Benefits of Implementation
+- Cost savings (specific numbers)
+- Performance improvements
+- Security enhancements
+- Other benefits
+
+## Implementation Steps
+1. Step 1 with details
+2. Step 2 with details
+3. [...]
+
+## Potential Challenges
+- Challenge 1 and how to address it
+- Challenge 2 and how to address it
+
+## Success Metrics
+How to measure if the implementation was successful
+
+## Estimated Timeline
+Total time from start to completion
+
+Be specific and actionable.
+"""
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=1500,
+                ),
+            )
+            
+            explanation_text = response.text
+            
+            return {
+                "status": "success",
+                "explanation": explanation_text,
+                "recommendation_id": recommendation.get("id") or recommendation.get("recommendation_id")
+            }
+        
+        except Exception as e:
+            logger.error(f"❌ Failed to explain recommendation: {str(e)}")
             return {
                 "status": "error",
                 "message": str(e)
