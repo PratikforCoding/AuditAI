@@ -66,14 +66,14 @@ class GCPMonitoringService:
         FIXED: Uses correct metric names and field references
         """
         try:
-            # ✅ FIXED: Correct MQL query for CPU utilization
+            # ✅ FIXED: Use mean(value) for CPU metric (not value.double_value)
             cpu_query = f"""
             fetch gce_instance
             | metric 'compute.googleapis.com/instance/cpu/utilization'
             | filter resource.instance_id == '{instance_id}'
             | filter resource.zone == '{zone}'
             | within {hours}h
-            | group_by [], [value_cpu_mean: mean(value.double_value)]
+            | group_by [], [value_cpu_mean: mean(value)]
             """
             
             cpu_results = self._execute_monitoring_query(cpu_query)
@@ -119,13 +119,13 @@ class GCPMonitoringService:
         FIXED: Corrected MQL query syntax
         """
         try:
-            # ✅ FIXED: Proper MQL query for all instances
+            # ✅ FIXED: Use mean(value) for CPU metric
             query = f"""
             fetch gce_instance
             | metric 'compute.googleapis.com/instance/cpu/utilization'
             | within {hours}h
             | group_by [resource.instance_id, resource.zone],
-                [value_cpu_mean: mean(value.double_value)]
+                [value_cpu_mean: mean(value)]
             """
             
             logger.info("Fetching metrics for all instances...")
@@ -319,12 +319,12 @@ class GCPMonitoringService:
         Returns True if we can query metrics
         """
         try:
-            # Simple test query - just count instances
+            # Simple test query - use count(value) not count(value.double_value)
             query = f"""
             fetch gce_instance
             | metric 'compute.googleapis.com/instance/cpu/utilization'
             | within 1h
-            | group_by [], [value_count: count(value.double_value)]
+            | group_by [], [value_count: count(value)]
             """
             
             request = monitoring_v3.QueryTimeSeriesRequest(

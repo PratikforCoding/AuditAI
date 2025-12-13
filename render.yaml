@@ -1,24 +1,56 @@
+# Render Blueprint Specification
+# Docs: https://render.com/docs/blueprint-spec
+
 services:
+  # Backend API Service
   - type: web
     name: auditai-backend
-    env: python
+    runtime: python
     region: oregon
     plan: free
     branch: develop
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /health
     envVars:
+      # Python Version
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11.0"
+      
+      # Database
       - key: MONGODB_URL
         sync: false
+      
       - key: DATABASE_NAME
         value: auditai
+      
+      # Security (auto-generated)
       - key: SECRET_KEY
         generateValue: true
+      
       - key: ENCRYPTION_KEY
         generateValue: true
+      
+      # Google Cloud / Gemini
       - key: GOOGLE_API_KEY
         sync: false
+      
       - key: GOOGLE_PROJECT_ID
-        sync: false
+        value: ""
+      
+      # App Config
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: PORT
+        value: "8000"
+      
+      - key: HOST
+        value: "0.0.0.0"
+      
+      - key: FRONTEND_URL
+        value: https://your-frontend.onrender.com
+      
+      # Logging
+      - key: LOG_LEVEL
+        value: INFO

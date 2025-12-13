@@ -104,7 +104,7 @@ class GCPBillingService:
             query = f"""
             SELECT
                 SUM(CAST(cost AS FLOAT64)) as total_cost,
-                SUM(CAST(credits.amount AS FLOAT64)) as total_credits,
+                SUM((SELECT SUM(CAST(c.amount AS FLOAT64)) FROM UNNEST(credits) AS c)) as total_credits,
                 COUNT(DISTINCT service.description) as service_count,
                 ARRAY_AGG(DISTINCT service.description IGNORE NULLS LIMIT 100) as services
             FROM
