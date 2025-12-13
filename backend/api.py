@@ -1,45 +1,50 @@
 """
-Main API endpoints
-Updated with MongoDB database operations
+Main API endpoints - FIXED VERSION
+Uses proper Repository pattern instead of db.User
+Removes async/await where not needed
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 import uuid
 import logging
-from backend.schemas import (
+
+from backend.models.schemas import (
     UserCreateRequest, UserLoginRequest, AnalysisRequest,
-    UserResponse, SuccessResponse, ErrorResponse, HealthCheckResponse
+    UserResponse, SuccessResponse, HealthCheckResponse
 )
-from backend.services.encryption import EncryptionService
-from backend.services.auth import AuthService
+from backend.services.auth_service import AuthService
+from backend.utils.encryption import CredentialEncryption
+from backend.middleware.auth import get_current_user, get_current_active_user
 from backend.models.repositories import (
-    UserRepository, AnalysisRepository, AuditReportRepository,
-    CostAnalysisRepository, SubscriptionRepository
+    UserRepository,
+    AnalysisRepository,
+    AuditReportRepository,
+    CostAnalysisRepository
 )
 from backend.models.db_models import UserDB, UserAnalysisDB
 from backend.config.settings import settings
+from backend.config.database import DatabaseConnection
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Security
-security = HTTPBearer()
 
-
-# ===== HEALTH CHECK =====
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
 
 @router.get("/health", response_model=HealthCheckResponse)
-async def health_check():
-    """Health check endpoint"""
-    from backend.config.database import DatabaseConnection
-    
+def health_check():  # ✅ FIXED: Removed async (not needed)
+    """
+    Health check endpoint
+    Verifies API and database connectivity
+    """
     db_healthy = DatabaseConnection.health_check()
     
     return HealthCheckResponse(
-        status="healthy",
+        status="healthy" if db_healthy else "degraded",
         service=settings.APP_NAME,
         version=settings.APP_VERSION,
         timestamp=datetime.utcnow(),
@@ -50,21 +55,31 @@ async def health_check():
     )
 
 
-# ===== AUTHENTICATION ENDPOINTS =====
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
 
 @router.post("/auth/register", response_model=SuccessResponse)
-async def register(request: UserCreateRequest):
-    """User registration endpoint"""
+def register(request: UserCreateRequest):  # ✅ FIXED: Removed async
+    """
+    User registration endpoint
+    
+    Args:
+        request: User registration details
+    
+    Returns:
+        Success response with JWT token
+    """
     try:
-        # Check if user already exists
-        existing_user = await UserRepository.find_by_email(request.email)
+        # ✅ FIXED: Use Repository pattern (not db.User)
+        existing_user = UserRepository.find_by_email(request.email)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
         
-        # Hash password
+        # ✅ FIXED: Use unified AuthService
         password_hash = AuthService.hash_password(request.password)
         
         # Create user
@@ -75,17 +90,21 @@ async def register(request: UserCreateRequest):
             password_hash=password_hash,
             company_name=request.company_name,
             subscription_tier="free",
+            is_active=True,
             created=datetime.utcnow(),
             updated=datetime.utcnow()
         )
         
         # Save to database
-        await UserRepository.create(user)
+        UserRepository.create(user)
         
         # Generate access token
         access_token = AuthService.create_access_token(
-            data={"sub": user.email, "user_id": user_id}
+            user_id=user_id,
+            email=user.email
         )
+        
+        logger.info(f"✅ User registered: {user_id}")
         
         return SuccessResponse(
             status="success",
@@ -95,14 +114,14 @@ async def register(request: UserCreateRequest):
                 "access_token": access_token,
                 "token_type": "bearer"
             },
-            message="Registration successful. Please add your GCP credentials next.",
+            message="Registration successful. Please add GCP credentials next.",
             timestamp=datetime.utcnow()
         )
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Registration error: {e}")
+        logger.error(f"❌ Registration error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
@@ -110,31 +129,49 @@ async def register(request: UserCreateRequest):
 
 
 @router.post("/auth/login", response_model=SuccessResponse)
-async def login(request: UserLoginRequest):
-    """User login endpoint"""
+def login(request: UserLoginRequest):  # ✅ FIXED: Removed async
+    """
+    User login endpoint
+    
+    Args:
+        request: Email and password
+    
+    Returns:
+        Success response with JWT token
+    """
     try:
-        # Find user
-        user = await UserRepository.find_by_email(request.email)
+        # ✅ FIXED: Use Repository pattern
+        user = UserRepository.find_by_email(request.email)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
             )
         
-        # Verify password
+        # ✅ FIXED: Use unified AuthService
         if not AuthService.verify_password(request.password, user.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
             )
         
+        # Check if active
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is inactive"
+            )
+        
         # Update last login
-        await UserRepository.update_last_login(user.user_id)
+        UserRepository.update_last_login(user.user_id)
         
         # Generate access token
         access_token = AuthService.create_access_token(
-            data={"sub": user.email, "user_id": user.user_id}
+            user_id=user.user_id,
+            email=user.email
         )
+        
+        logger.info(f"✅ User logged in: {user.user_id}")
         
         return SuccessResponse(
             status="success",
@@ -153,34 +190,35 @@ async def login(request: UserLoginRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error: {e}")
+        logger.error(f"❌ Login error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
         )
 
 
-# ===== GCP CREDENTIALS ENDPOINTS =====
+# ============================================================================
+# GCP CREDENTIALS ENDPOINTS
+# ============================================================================
 
 @router.post("/auth/add-gcp-credentials", response_model=SuccessResponse)
-async def add_gcp_credentials(
+def add_gcp_credentials(
     credentials_request: dict,
-    token: str = Depends(security)
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
 ):
-    """Add GCP credentials to user account"""
+    """
+    Add GCP credentials to user account
+    
+    Args:
+        credentials_request: GCP project ID and service account JSON
+        user_id: Extracted from JWT token
+    
+    Returns:
+        Success response
+    """
     try:
-        # Verify token and get user
-        payload = AuthService.verify_token(token.credentials)
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
         # Get user from database
-        user = await UserRepository.find_by_id(user_id)
+        user = UserRepository.find_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -198,10 +236,14 @@ async def add_gcp_credentials(
             )
         
         # Encrypt credentials
-        encrypted_credentials = EncryptionService.encrypt(service_account_json)
+        encryptor = CredentialEncryption()
+        encrypted_credentials = encryptor.encrypt({
+            "project_id": project_id,
+            "service_account_json": service_account_json
+        })
         
         # Update user with encrypted credentials
-        await UserRepository.add_gcp_credentials(
+        UserRepository.add_gcp_credentials(
             user_id,
             project_id,
             encrypted_credentials
@@ -219,31 +261,33 @@ async def add_gcp_credentials(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Add credentials error: {e}")
+        logger.error(f"❌ Add credentials error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to add credentials"
         )
 
 
-# ===== USER ENDPOINTS =====
+# ============================================================================
+# USER ENDPOINTS
+# ============================================================================
 
 @router.get("/users/me", response_model=SuccessResponse)
-async def get_current_user(token: str = Depends(security)):
-    """Get current user information"""
+def get_current_user_endpoint(
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
+):
+    """
+    Get current user information
+    
+    Args:
+        user_id: Extracted from JWT token
+    
+    Returns:
+        User information
+    """
     try:
-        # Verify token
-        payload = AuthService.verify_token(token.credentials)
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
         # Get user from database
-        user = await UserRepository.find_by_id(user_id)
+        user = UserRepository.find_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -258,6 +302,7 @@ async def get_current_user(token: str = Depends(security)):
                 "company_name": user.company_name,
                 "subscription_tier": user.subscription_tier,
                 "has_gcp_credentials": user.gcp_credentials is not None,
+                "is_active": user.is_active,
                 "created": user.created
             },
             timestamp=datetime.utcnow()
@@ -266,34 +311,35 @@ async def get_current_user(token: str = Depends(security)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get user error: {e}")
+        logger.error(f"❌ Get user error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get user"
         )
 
 
-# ===== ANALYSIS ENDPOINTS =====
+# ============================================================================
+# ANALYSIS ENDPOINTS
+# ============================================================================
 
 @router.post("/agent/analyze", response_model=SuccessResponse)
-async def analyze_infrastructure(
+def analyze_infrastructure(
     request: AnalysisRequest,
-    token: str = Depends(security)
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
 ):
-    """Run infrastructure analysis"""
+    """
+    Run infrastructure analysis
+    
+    Args:
+        request: Analysis request with query and days
+        user_id: Extracted from JWT token
+    
+    Returns:
+        Analysis result
+    """
     try:
-        # Verify token
-        payload = AuthService.verify_token(token.credentials)
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
         # Get user
-        user = await UserRepository.find_by_id(user_id)
+        user = UserRepository.find_by_id(user_id)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -308,7 +354,8 @@ async def analyze_infrastructure(
             )
         
         # Decrypt credentials
-        decrypted_creds = EncryptionService.decrypt(user.gcp_credentials)
+        encryptor = CredentialEncryption()
+        decrypted_creds = encryptor.decrypt(user.gcp_credentials)
         
         # TODO: Call Gemini AI for analysis
         # For now, return mock response
@@ -326,13 +373,14 @@ async def analyze_infrastructure(
                 "total_savings": 0
             },
             cost_savings=0,
+            execution_time=None,
             created=datetime.utcnow(),
             updated=datetime.utcnow(),
             status="completed"
         )
         
         # Save analysis to database
-        await AnalysisRepository.create(analysis)
+        AnalysisRepository.create(analysis)
         
         logger.info(f"✅ Analysis created: {analysis_id}")
         
@@ -350,7 +398,7 @@ async def analyze_infrastructure(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Analysis error: {e}")
+        logger.error(f"❌ Analysis error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Analysis failed"
@@ -358,24 +406,23 @@ async def analyze_infrastructure(
 
 
 @router.get("/agent/analyses", response_model=SuccessResponse)
-async def get_user_analyses(
+def get_user_analyses(
     limit: int = 10,
-    token: str = Depends(security)
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
 ):
-    """Get user's analysis history"""
+    """
+    Get user's analysis history
+    
+    Args:
+        limit: Number of analyses to return
+        user_id: Extracted from JWT token
+    
+    Returns:
+        List of analyses
+    """
     try:
-        # Verify token
-        payload = AuthService.verify_token(token.credentials)
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
         # Get analyses from database
-        analyses = await AnalysisRepository.find_by_user_id(user_id, limit)
+        analyses = AnalysisRepository.find_by_user_id(user_id, limit)
         
         return SuccessResponse(
             status="success",
@@ -389,34 +436,35 @@ async def get_user_analyses(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get analyses error: {e}")
+        logger.error(f"❌ Get analyses error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch analyses"
         )
 
 
-# ===== REPORTS ENDPOINTS =====
+# ============================================================================
+# REPORTS ENDPOINTS
+# ============================================================================
 
 @router.get("/reports", response_model=SuccessResponse)
-async def get_user_reports(
+def get_user_reports(
     limit: int = 10,
-    token: str = Depends(security)
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
 ):
-    """Get user's audit reports"""
+    """
+    Get user's audit reports
+    
+    Args:
+        limit: Number of reports to return
+        user_id: Extracted from JWT token
+    
+    Returns:
+        List of audit reports
+    """
     try:
-        # Verify token
-        payload = AuthService.verify_token(token.credentials)
-        user_id = payload.get("user_id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-        
         # Get reports from database
-        reports = await AuditReportRepository.find_by_user_id(user_id, limit)
+        reports = AuditReportRepository.find_by_user_id(user_id, limit)
         
         return SuccessResponse(
             status="success",
@@ -430,7 +478,7 @@ async def get_user_reports(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get reports error: {e}")
+        logger.error(f"❌ Get reports error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch reports"

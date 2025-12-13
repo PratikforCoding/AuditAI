@@ -1,28 +1,32 @@
 """
-Authentication API endpoints
-- Register user
-- Login user
-- Add GCP credentials
-- Verify credentials
+Authentication API endpoints - FIXED VERSION
+Uses proper Repository pattern and JWT middleware
 """
 
 import logging
 import uuid
 from fastapi import APIRouter, HTTPException, status, Depends
-from datetime import datetime, timedelta
+from datetime import datetime
+
 from backend.models.schemas import (
     UserCreateRequest,
     UserLoginRequest,
     AddCredentialsRequest
 )
-from backend.middleware.auth import JWTHandler, get_current_user
-from backend.utils.encryption import PasswordEncryption, CredentialEncryption
-from backend.utils.logger import get_logger
+from backend.models.repositories import UserRepository
+from backend.models.db_models import UserDB
+from backend.middleware.auth import get_current_user, get_current_active_user
+from backend.services.auth_service import AuthService
+from backend.utils.encryption import CredentialEncryption
 from backend.gcp_client import GCPClient
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 
+
+# ============================================================================
+# PUBLIC ENDPOINTS (No Authentication Required)
+# ============================================================================
 
 @router.post("/register", response_model=dict)
 async def register_user(request: UserCreateRequest):
@@ -30,54 +34,75 @@ async def register_user(request: UserCreateRequest):
     Register new user account
     
     Args:
-        request: User registration details
+        request: User registration details (email, password, company_name)
     
     Returns:
-        Success message with user_id
+        Success message with user_id and JWT token
+    
+    Example:
+        POST /api/v1/auth/register
+        {
+            "email": "user@company.com",
+            "password": "SecurePass123!",
+            "company_name": "ACME Corp"
+        }
     """
     try:
-        logger.info(f"Registration attempt for: {request.email}")
+        logger.info(f"📝 Registration attempt: {request.email}")
         
-        from backend.models.database import db
-        
-        existing_user = db.User.find_by_email(request.email)
+        # ✅ FIXED: Use Repository pattern
+        existing_user = UserRepository.find_by_email(request.email)
         if existing_user:
-            logger.warning(f"Registration failed: email already registered: {request.email}")
+            logger.warning(f"❌ Email already registered: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered"
             )
         
+        # Generate user ID
         user_id = str(uuid.uuid4())
-        password_hash = PasswordEncryption.hash_password(request.password)
         
-        user_data = {
-            "id": user_id,
-            "email": request.email,
-            "password_hash": password_hash,
-            "company_name": request.company_name,
-            "gcp_project_id": None,
-            "gcp_credentials": None,
-            "created": datetime.utcnow().isoformat(),
-            "last_login": None,
-            "subscription_tier": "free",
-            "is_active": True
-        }
+        # ✅ FIXED: Use unified AuthService with bcrypt
+        password_hash = AuthService.hash_password(request.password)
         
-        db.User.save(user_data)
-        logger.info(f"User registered successfully: {user_id}")
+        # Create user object
+        user = UserDB(
+            user_id=user_id,
+            email=request.email,
+            password_hash=password_hash,
+            company_name=request.company_name,
+            gcp_project_id=None,
+            gcp_credentials=None,
+            subscription_tier="free",
+            is_active=True,
+            created=datetime.utcnow(),
+            updated=datetime.utcnow(),
+            last_login=None
+        )
+        
+        # Save to database
+        UserRepository.create(user)
+        logger.info(f"✅ User registered: {user_id}")
+        
+        # Generate JWT token
+        token = AuthService.create_access_token(
+            user_id=user_id,
+            email=request.email
+        )
         
         return {
             "status": "success",
             "user_id": user_id,
             "email": request.email,
-            "message": "Registration successful. Please log in."
+            "token": token,
+            "token_type": "bearer",
+            "message": "Registration successful. Please add GCP credentials next."
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Registration error: {str(e)}")
+        logger.error(f"❌ Registration error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed"
@@ -94,94 +119,123 @@ async def login_user(request: UserLoginRequest):
     
     Returns:
         JWT token and user info
+    
+    Example:
+        POST /api/v1/auth/login
+        {
+            "email": "user@company.com",
+            "password": "SecurePass123!"
+        }
     """
     try:
-        logger.info(f"Login attempt for: {request.email}")
+        logger.info(f"🔐 Login attempt: {request.email}")
         
-        from backend.models.database import db
-        
-        user = db.User.find_by_email(request.email)
+        # ✅ FIXED: Use Repository pattern
+        user = UserRepository.find_by_email(request.email)
         if not user:
-            logger.warning(f"Login failed: user not found: {request.email}")
+            logger.warning(f"❌ User not found: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
         
-        if not PasswordEncryption.verify_password(request.password, user['password_hash']):
-            logger.warning(f"Login failed: invalid password for: {request.email}")
+        # ✅ FIXED: Use unified AuthService with bcrypt
+        if not AuthService.verify_password(request.password, user.password_hash):
+            logger.warning(f"❌ Invalid password: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
         
-        if not user.get('is_active', False):
-            logger.warning(f"Login failed: account inactive: {request.email}")
+        # Check if account is active
+        if not user.is_active:
+            logger.warning(f"❌ Inactive account: {request.email}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Account is inactive"
+                detail="Account is inactive. Please contact support."
             )
         
-        token = JWTHandler.create_access_token(subject=user['id'])
+        # Generate JWT token
+        token = AuthService.create_access_token(
+            user_id=user.user_id,
+            email=user.email
+        )
         
-        db.User.update_last_login(user['id'])
+        # Update last login
+        UserRepository.update_last_login(user.user_id)
         
-        logger.info(f"User logged in successfully: {user['id']}")
+        logger.info(f"✅ User logged in: {user.user_id}")
         
         return {
             "status": "success",
             "token": token,
-            "user_id": user['id'],
-            "email": user['email'],
-            "has_gcp_credentials": bool(user.get('gcp_credentials'))
+            "token_type": "bearer",
+            "user_id": user.user_id,
+            "email": user.email,
+            "company_name": user.company_name,
+            "has_gcp_credentials": bool(user.gcp_credentials),
+            "subscription_tier": user.subscription_tier
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
+        logger.error(f"❌ Login error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
         )
 
 
+# ============================================================================
+# PROTECTED ENDPOINTS (Require Authentication)
+# ============================================================================
+
 @router.post("/add-gcp-credentials")
 async def add_gcp_credentials(
     request: AddCredentialsRequest,
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
 ):
     """
-    User uploads their GCP credentials
+    Add GCP credentials to user account
     Validates and encrypts before storing
     
     Args:
-        request: GCP project details and credentials
-        user_id: Current authenticated user
+        request: GCP project details and service account JSON
+        user_id: Automatically extracted from JWT token
     
     Returns:
         Success message
+    
+    Example:
+        POST /api/v1/auth/add-gcp-credentials
+        Headers: Authorization: Bearer <jwt_token>
+        {
+            "project_id": "my-gcp-project",
+            "service_account_json": "{...}",
+            "api_key": "AIzaSy..."
+        }
     """
     try:
-        logger.info(f"Adding GCP credentials for user: {user_id}")
+        logger.info(f"🔑 Adding GCP credentials for user: {user_id}")
         
-        from backend.models.database import db
-        
+        # Validate GCP credentials
         try:
             gcp_client = GCPClient(request.project_id)
             if not gcp_client.verify_credentials():
-                logger.warning(f"Invalid GCP credentials for user: {user_id}")
+                logger.warning(f"❌ Invalid GCP credentials: {user_id}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="GCP credentials are invalid or insufficient"
+                    detail="GCP credentials are invalid or lack required permissions"
                 )
         except Exception as e:
-            logger.error(f"GCP validation failed for user {user_id}: {str(e)}")
+            logger.error(f"❌ GCP validation failed: {e}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to validate GCP credentials: {str(e)}"
             )
         
+        # Encrypt credentials
         encryptor = CredentialEncryption()
         encrypted_creds = encryptor.encrypt({
             "project_id": request.project_id,
@@ -189,13 +243,14 @@ async def add_gcp_credentials(
             "api_key": request.api_key
         })
         
-        db.User.add_gcp_credentials(
+        # ✅ FIXED: Use Repository pattern
+        UserRepository.add_gcp_credentials(
             user_id=user_id,
             project_id=request.project_id,
             encrypted_credentials=encrypted_creds
         )
         
-        logger.info(f"GCP credentials saved for user: {user_id}")
+        logger.info(f"✅ GCP credentials saved: {user_id}")
         
         return {
             "status": "success",
@@ -206,7 +261,7 @@ async def add_gcp_credentials(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to add credentials for {user_id}: {str(e)}")
+        logger.error(f"❌ Failed to add credentials: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save credentials"
@@ -214,48 +269,58 @@ async def add_gcp_credentials(
 
 
 @router.get("/verify-credentials")
-async def verify_credentials(user_id: str = Depends(get_current_user)):
+async def verify_credentials(
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
+):
     """
     Verify that user's GCP credentials are valid
     
     Args:
-        user_id: Current authenticated user
+        user_id: Automatically extracted from JWT token
     
     Returns:
-        Credential status
+        Credential status and validation result
+    
+    Example:
+        GET /api/v1/auth/verify-credentials
+        Headers: Authorization: Bearer <jwt_token>
     """
     try:
-        logger.info(f"Verifying credentials for user: {user_id}")
+        logger.info(f"🔍 Verifying credentials for user: {user_id}")
         
-        from backend.models.database import db
+        # ✅ FIXED: Use Repository pattern
+        user = UserRepository.find_by_id(user_id)
         
-        user = db.User.find_by_id(user_id)
-        
-        if not user or not user.get('gcp_credentials'):
+        if not user or not user.gcp_credentials:
             return {
+                "status": "no_credentials",
                 "has_credentials": False,
                 "is_valid": False,
                 "message": "No GCP credentials configured"
             }
         
+        # Decrypt and validate
         encryptor = CredentialEncryption()
         try:
-            creds = encryptor.decrypt(user['gcp_credentials'])
+            creds = encryptor.decrypt(user.gcp_credentials)
             gcp_client = GCPClient(creds['project_id'])
             is_valid = gcp_client.verify_credentials()
-        except:
+        except Exception as e:
+            logger.error(f"❌ Credential validation failed: {e}")
             is_valid = False
         
-        logger.info(f"Credentials verified for user: {user_id}, valid: {is_valid}")
+        logger.info(f"✅ Credentials verified: {user_id}, valid: {is_valid}")
         
         return {
+            "status": "success",
             "has_credentials": True,
             "is_valid": is_valid,
-            "project_id": user.get('gcp_project_id')
+            "project_id": user.gcp_project_id,
+            "message": "Credentials are valid" if is_valid else "Credentials are invalid"
         }
     
     except Exception as e:
-        logger.error(f"Verification failed for {user_id}: {str(e)}")
+        logger.error(f"❌ Verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Verification failed"
@@ -263,39 +328,72 @@ async def verify_credentials(user_id: str = Depends(get_current_user)):
 
 
 @router.get("/me")
-async def get_current_user_info(user_id: str = Depends(get_current_user)):
+async def get_current_user_info(
+    user: dict = Depends(get_current_active_user)  # ✅ FIXED: Use middleware
+):
     """
-    Get current user information
+    Get current user information from database
     
     Args:
-        user_id: Current authenticated user
+        user: Automatically extracted from JWT and fetched from database
     
     Returns:
         User details
+    
+    Example:
+        GET /api/v1/auth/me
+        Headers: Authorization: Bearer <jwt_token>
     """
     try:
-        from backend.models.database import db
-        
-        user = db.User.find_by_id(user_id)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
         return {
-            "user_id": user['id'],
-            "email": user['email'],
-            "company_name": user.get('company_name'),
-            "subscription_tier": user.get('subscription_tier'),
-            "has_gcp_credentials": bool(user.get('gcp_credentials')),
-            "created": user.get('created')
+            "status": "success",
+            "user": {
+                "user_id": user['user_id'],
+                "email": user['email'],
+                "company_name": user.get('company_name'),
+                "subscription_tier": user.get('subscription_tier'),
+                "has_gcp_credentials": bool(user.get('gcp_credentials')),
+                "is_active": user.get('is_active'),
+                "created": user.get('created'),
+                "last_login": user.get('last_login')
+            }
         }
     
     except Exception as e:
-        logger.error(f"Failed to get user info: {str(e)}")
+        logger.error(f"❌ Failed to get user info: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve user information"
+        )
+
+
+@router.delete("/logout")
+async def logout_user(
+    user_id: str = Depends(get_current_user)  # ✅ FIXED: Use middleware
+):
+    """
+    Logout user (client-side token deletion)
+    
+    Note: JWT tokens are stateless. Client must delete the token.
+    This endpoint is for logging purposes only.
+    
+    Args:
+        user_id: Automatically extracted from JWT token
+    
+    Returns:
+        Logout confirmation
+    """
+    try:
+        logger.info(f"👋 User logged out: {user_id}")
+        
+        return {
+            "status": "success",
+            "message": "Logged out successfully. Please delete token on client side."
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ Logout error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout failed"
         )

@@ -1,14 +1,57 @@
+# ============================================================================
+# AuditAI Backend Requirements
+# Complete and tested dependencies
+# ============================================================================
+
+# ===== FastAPI & ASGI Server =====
 fastapi==0.104.1
-uvicorn==0.24.0
-google-cloud-compute==1.13.0
-google-cloud-storage==2.10.0
-google-generativeai==0.3.0
-pymongo==4.6.0
-python-dotenv==1.0.0
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# ===== Pydantic (Data Validation) =====
 pydantic==2.5.0
 pydantic-settings==2.1.0
-python-multipart==0.0.6
+email-validator==2.1.0
+
+# ===== Database (MongoDB) =====
+pymongo==4.6.0
+# Uncomment below if you want async MongoDB support
+# motor==3.3.2
+
+# ===== Authentication & Security =====
+passlib[bcrypt]==1.7.4          # Password hashing with bcrypt
+python-jose[cryptography]==3.3.0 # JWT token handling
+cryptography==41.0.7             # Encryption for credentials
+
+# ===== Google Cloud Platform =====
+google-cloud-compute==1.15.0
+google-cloud-storage==2.10.0
+google-cloud-monitoring==2.16.0
+google-cloud-recommender==2.12.0
+google-cloud-billing==1.11.0
+google-cloud-bigquery==3.13.0
+
+# ===== Google AI (Gemini) =====
+google-generativeai==0.3.2
+google-ai-generativelanguage==0.4.0
+
+# ===== HTTP Clients =====
+httpx==0.25.2
 aiohttp==3.9.1
-httpx==0.25.1
-pymongo>=4.6.0
-pydantic-settings>=2.1.0
+requests==2.31.0
+
+# ===== Utilities =====
+python-dotenv==1.0.0
+PyJWT==2.8.0
+
+# ===== Development Tools (Optional) =====
+# Uncomment for development
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# black==23.12.1
+# flake8==6.1.0
+# mypy==1.7.1
+
+# ===== Production Monitoring (Optional) =====
+# sentry-sdk==1.39.1
+# prometheus-client==0.19.0
