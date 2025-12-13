@@ -8,14 +8,14 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 import logging
-from backend.config.database import (
+from config.database import (
     users_collection,
     analyses_collection,
     reports_collection,
     cost_analyses_collection,
     subscriptions_collection
 )
-from backend.models.db_models import (
+from models.db_models import (
     UserDB, UserAnalysisDB, AuditReportDB, CostAnalysisDB, SubscriptionDB
 )
 
@@ -531,7 +531,7 @@ class SubscriptionRepository:
 
 if __name__ == "__main__":
     # Example 1: Create user
-    from backend.models.db_models import UserDB
+    from models.db_models import UserDB
     
     user = UserDB(
         user_id="test-user-123",

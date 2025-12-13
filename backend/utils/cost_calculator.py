@@ -583,7 +583,7 @@ class CostCalculator:
 
 
 # Usage examples:
-# from backend.utils.cost_calculator import CostCalculator
+# from utils.cost_calculator import CostCalculator
 #
 # calculator = CostCalculator()
 #

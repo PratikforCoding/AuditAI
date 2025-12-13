@@ -9,12 +9,12 @@ from typing import Optional, Dict, Any, List
 import json
 import logging
 
-from backend.models.repositories import UserRepository
-from backend.middleware.auth import get_current_user
-from backend.services.auth_service import AuthService
-from backend.utils.encryption import CredentialEncryption
-from backend.utils.validators import Validators
-from backend.gcp_client import GCPClient
+from models.repositories import UserRepository
+from middleware.auth import get_current_user
+from services.auth_service import AuthService
+from utils.encryption import CredentialEncryption
+from utils.validators import Validators
+from gcp_client import GCPClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"])
@@ -817,7 +817,7 @@ async def check_gcp_permissions_debug(
         
         # Step 4: Initialize client
         logger.info("🐛 Step 4: Initializing GCP client...")
-        from backend.gcp_client import GCPClient
+        from gcp_client import GCPClient
         gcp_client = GCPClient(
             project_id=project_id,
             service_account_info=sa_dict

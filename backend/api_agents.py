@@ -5,14 +5,14 @@ All endpoints properly use USER credentials for multitenant isolation
 """
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
-from backend.middleware.auth import get_current_user
-from backend.models.repositories import UserRepository
+from middleware.auth import get_current_user
+from models.repositories import UserRepository
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
-from backend.services.gemini_agent_service import GeminiAgentService
-from backend.models.schemas import ApiResponse
-from backend.utils.logger import get_logger
+from services.gemini_agent_service import GeminiAgentService
+from models.schemas import ApiResponse
+from utils.logger import get_logger
 import json
 
 logger = get_logger(__name__)
@@ -133,7 +133,7 @@ def get_user_credentials(user_id: str) -> dict:
         )
     
     # Decrypt user's credentials
-    from backend.utils.encryption import CredentialEncryption
+    from utils.encryption import CredentialEncryption
     encryptor = CredentialEncryption()
     user_creds = encryptor.decrypt(user.gcp_credentials)
     

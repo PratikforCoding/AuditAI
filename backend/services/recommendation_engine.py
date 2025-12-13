@@ -10,10 +10,10 @@ import uuid
 import logging
 from enum import Enum
 
-from backend.models.schemas import Recommendation
-from backend.services.gcp_billing_service import GCPBillingService
-from backend.services.gcp_monitoring_service import GCPMonitoringService
-from backend.services.gcp_recommender_service import GCPRecommenderService
+from models.schemas import Recommendation
+from services.gcp_billing_service import GCPBillingService
+from services.gcp_monitoring_service import GCPMonitoringService
+from services.gcp_recommender_service import GCPRecommenderService
 
 logger = logging.getLogger(__name__)
 

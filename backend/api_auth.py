@@ -8,17 +8,17 @@ import uuid
 from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime
 
-from backend.models.schemas import (
+from models.schemas import (
     UserCreateRequest,
     UserLoginRequest,
     AddCredentialsRequest
 )
-from backend.models.repositories import UserRepository
-from backend.models.db_models import UserDB
-from backend.middleware.auth import get_current_user, get_current_active_user
-from backend.services.auth_service import AuthService
-from backend.utils.encryption import CredentialEncryption
-from backend.gcp_client import GCPClient
+from models.repositories import UserRepository
+from models.db_models import UserDB
+from middleware.auth import get_current_user, get_current_active_user
+from services.auth_service import AuthService
+from utils.encryption import CredentialEncryption
+from gcp_client import GCPClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])

@@ -10,8 +10,8 @@ import time
 from typing import Dict, List, Any, Optional
 import google.generativeai as genai
 from google.api_core import exceptions as google_exceptions
-from backend.config.settings import settings
-from backend.utils.logger import get_logger
+from config.settings import settings
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 

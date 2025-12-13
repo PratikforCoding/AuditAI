@@ -10,22 +10,22 @@ from typing import Optional
 import uuid
 import logging
 
-from backend.models.schemas import (
+from models.schemas import (
     UserCreateRequest, UserLoginRequest, AnalysisRequest,
     UserResponse, SuccessResponse, HealthCheckResponse
 )
-from backend.services.auth_service import AuthService
-from backend.utils.encryption import CredentialEncryption
-from backend.middleware.auth import get_current_user, get_current_active_user
-from backend.models.repositories import (
+from services.auth_service import AuthService
+from utils.encryption import CredentialEncryption
+from middleware.auth import get_current_user, get_current_active_user
+from models.repositories import (
     UserRepository,
     AnalysisRepository,
     AuditReportRepository,
     CostAnalysisRepository
 )
-from backend.models.db_models import UserDB, UserAnalysisDB
-from backend.config.settings import settings
-from backend.config.database import DatabaseConnection
+from models.db_models import UserDB, UserAnalysisDB
+from config.settings import settings
+from config.database import DatabaseConnection
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 import logging
-from backend.services.auth_service import AuthService
+from services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +141,7 @@ async def get_current_active_user(
         HTTPException 403: If user account is inactive
     """
     try:
-        from backend.models.repositories import UserRepository
+        from models.repositories import UserRepository
         
         # Get user from database
         user = UserRepository.find_by_id(user_id)

@@ -8,7 +8,7 @@ from pymongo.errors import ServerSelectionTimeoutError, ConnectionFailure
 from contextlib import contextmanager
 from typing import Optional
 import logging
-from backend.config.settings import settings
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 

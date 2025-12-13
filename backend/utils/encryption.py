@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Dict, Any
 from cryptography.fernet import Fernet
-from backend.config.settings import settings
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 

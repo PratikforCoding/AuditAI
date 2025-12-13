@@ -10,13 +10,13 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import google.generativeai as genai
-from backend.config.settings import settings
-from backend.services.recommendation_engine import ProductionRecommendationEngine
-from backend.services.gcp_billing_service import GCPBillingService
-from backend.services.gcp_monitoring_service import GCPMonitoringService
-from backend.services.gcp_recommender_service import GCPRecommenderService
-from backend.utils.logger import get_logger
-from backend.services.gemini_client_with_fallback import GeminiClientWithFallback
+from config.settings import settings
+from services.recommendation_engine import ProductionRecommendationEngine
+from services.gcp_billing_service import GCPBillingService
+from services.gcp_monitoring_service import GCPMonitoringService
+from services.gcp_recommender_service import GCPRecommenderService
+from utils.logger import get_logger
+from services.gemini_client_with_fallback import GeminiClientWithFallback
 
 logger = get_logger(__name__)
 
