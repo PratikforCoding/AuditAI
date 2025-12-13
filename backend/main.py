@@ -5,14 +5,12 @@ from contextlib import asynccontextmanager
 import logging
 
 # Import ALL routers
-from backend.api import router as api_router
-from backend.api_auth import router as auth_router
-from backend.api_onboarding import router as onboarding_router
-from backend.api_agents import router as agent_router
-
-from backend.config.settings import settings
-from backend.config.database import DatabaseConnection
-
+from api import router as api_router
+from api_auth import router as auth_router
+from api_onboarding import router as onboarding_router
+from api_agents import router as agent_router
+from config.settings import settings
+from config.database import DatabaseConnection
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
 

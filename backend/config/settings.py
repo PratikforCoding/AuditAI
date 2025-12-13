@@ -15,10 +15,10 @@ class Settings(BaseSettings):
     
     # ===== Pydantic v2 Configuration =====
     model_config = ConfigDict(
-        extra='ignore',              # ✅ Ignores frontend vars (NEXT_PUBLIC_*, etc)
-        env_file='.env.local',       # ✅ Loads .env.local automatically
-        env_ignore_empty=True,       # ✅ Ignores empty environment variables
-        case_sensitive=False         # ✅ Flexible with env var names
+        extra='ignore',
+        env_file=['../.env.local', '.env.local', '.env'],  # Check multiple locations
+        env_ignore_empty=True,
+        case_sensitive=False
     )
     
     # ===== Environment =====

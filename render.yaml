@@ -1,59 +1,33 @@
-# render.yaml - Place this in your project root
-
 services:
-  # Backend API Service
   - type: web
     name: auditai-backend
     runtime: python
-    region: oregon # or your preferred region
-    plan: free # or starter/standard
+    region: oregon
+    plan: free
     
-    # ✅ IMPORTANT: Set root directory to project root, not backend
-    rootDir: .
+    # ✅ Set root directory to backend folder
+    rootDir: backend
     
-    # Build command - install dependencies
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
+    # Build command
+    buildCommand: pip install -r requirements.txt
     
-    # Start command - run from root
+    # ✅ Start command (now just python main.py, no path needed)
     startCommand: python main.py
     
-    # Environment variables
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.4
-      
       - key: PORT
         value: 8000
-      
-      # MongoDB - Add as secret in Render dashboard
-      - key: MONGODB_URI
+      - key: MONGODB_URL
         sync: false
-      
-      - key: MONGODB_DB_NAME
-        value: auditai
-      
-      # JWT - Add as secret in Render dashboard
-      - key: JWT_SECRET_KEY
+      - key: SECRET_KEY
         sync: false
-      
-      - key: JWT_ALGORITHM
-        value: HS256
-      
-      - key: JWT_EXPIRATION_HOURS
-        value: 24
-      
-      # Encryption - Add as secret in Render dashboard
       - key: ENCRYPTION_KEY
         sync: false
-      
-      # Gemini API - Add as secret in Render dashboard
       - key: GEMINI_API_KEY
         sync: false
+      - key: DATABASE_NAME
+        value: auditai
+      - key: ENVIRONMENT
+        value: production
     
-    # Health check
     healthCheckPath: /health
-    
-    # Auto-deploy on push to main branch
-    autoDeploy: true
