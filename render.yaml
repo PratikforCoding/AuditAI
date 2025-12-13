@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: auditai-backend
+    runtime: python
+    region: oregon
+    plan: free
+    
+    # ✅ Set root directory to backend folder
+    rootDir: backend
+    
+    # Build command
+    buildCommand: pip install -r requirements.txt
+    
+    # ✅ Start command (now just python main.py, no path needed)
+    startCommand: python main.py
+    
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: MONGODB_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_NAME
+        value: auditai
+      - key: ENVIRONMENT
+        value: production
+    
+    healthCheckPath: /health

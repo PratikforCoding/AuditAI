@@ -1,12 +1,47 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-google-cloud-compute==1.13.0
-google-cloud-storage==2.10.0
-google-generativeai==0.3.0
-pymongo==4.6.0
-python-dotenv==1.0.0
-pydantic==2.5.0
-pydantic-settings==2.1.0
-python-multipart==0.0.6
-aiohttp==3.9.1
-httpx==0.25.1
+# ============================================================================
+# AuditAI Backend Requirements - RENDER COMPATIBLE
+# Fixed: Uses pre-compiled wheels (no Rust compilation needed)
+# ============================================================================
+
+# ===== FastAPI & ASGI Server =====
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# ===== Pydantic (FIXED: Uses pre-compiled version) =====
+pydantic==2.10.3
+pydantic-settings==2.7.0
+
+# ===== Database (MongoDB) =====
+pymongo==4.10.1
+
+# ===== Authentication & Security =====
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+cryptography==44.0.0
+PyJWT==2.10.1
+
+# ===== Google Cloud Platform =====
+google-cloud-compute>=1.14.0
+google-cloud-storage>=2.10.0
+google-auth>=2.23.0
+
+# ===== Google Cloud APIs =====
+google-cloud-billing>=1.12.0
+google-cloud-monitoring>=2.16.0
+google-cloud-recommender>=2.14.0
+google-cloud-bigquery>=3.13.0
+
+# ===== Google AI (Gemini) =====
+google-generativeai==0.3.2
+google-api-python-client>=2.100.0
+
+# ===== HTTP Clients =====
+httpx==0.28.1
+aiohttp==3.11.11
+
+# ===== Utilities =====
+python-dotenv==1.0.1
+
+# ===== Email Validation (Optional) =====
+email-validator==2.2.0

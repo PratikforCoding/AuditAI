@@ -1,73 +1,106 @@
 """
-Configuration settings for AuditAI backend
+Application settings and configuration
+Updated with MongoDB Atlas configuration
+FIXED for Pydantic v2
 """
 
+import os  # ✅ ADD THIS IMPORT
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional
-import os
-from functools import lru_cache
-from datetime import datetime
+
 
 class Settings(BaseSettings):
     """Application settings"""
     
-    # Application
+    # ===== Pydantic v2 Configuration =====
+    model_config = ConfigDict(
+        extra='ignore',
+        env_file=['../.env.local', '.env.local', '.env'],  # Check multiple locations
+        env_ignore_empty=True,
+        case_sensitive=False
+    )
+    
+    # ===== Environment =====
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+    LOG_LEVEL: str = "INFO"
+    
+    # ===== Application =====
     APP_NAME: str = "AuditAI"
-    APP_VERSION: str = "0.1.0"
-    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    APP_VERSION: str = "1.0.0"
+    API_PREFIX: str = "/api/v1"
     
-    # Server
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = int(os.getenv("API_PORT", 8000))
-    API_PREFIX: str = "/api"
+    # ===== Server =====
+    HOST: str = "0.0.0.0"
+    PORT: int = int(os.getenv("PORT", 8000))  # ✅ CHANGED: Support Render's PORT env var
+    FRONTEND_URL: str = "http://localhost:3000"
     
-    # CORS
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "https://*.vercel.app",
-    ]
-    
-    # Google Cloud
-    GOOGLE_PROJECT_ID: str = os.getenv("GOOGLE_PROJECT_ID", "")
-    GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv(
-        "GOOGLE_APPLICATION_CREDENTIALS", 
-        "/Users/pratikkotal/Documents/Agent-Hack/auditai-sa.json"
-    )
-    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
-    
-    # MongoDB
-    MONGODB_URI: str = os.getenv(
-        "MONGODB_URI", 
-        ""
-    )
-    MONGODB_DB_NAME: str = "auditai"
-    
-    # JWT/Auth
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    # ===== Security =====
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    ENCRYPTION_KEY: str
     
-    # Features
-    ENABLE_AUDIT_SCHEDULING: bool = True
-    AUDIT_FREQUENCY_HOURS: int = 24
-    ENABLE_AGENTIC_AI: bool = True
-    BILLING_EXPORT_DATASET: str = os.getenv("BILLING_EXPORT_DATASET", "billing_export")
+    # ===== MongoDB Atlas Configuration =====
+    MONGODB_URL: str
+    DATABASE_NAME: str = "auditai"
     
-    # Limits
-    MAX_RESOURCES_PER_SCAN: int = 1000
-    MAX_AUDIT_HISTORY: int = 100
-    API_RATE_LIMIT: int = 100  # requests per minute
+    # MongoDB Collection Names
+    USERS_COLLECTION: str = "users"
+    ANALYSES_COLLECTION: str = "user_analyses"
+    REPORTS_COLLECTION: str = "audit_reports"
+    COST_ANALYSES_COLLECTION: str = "cost_analyses"
+    SUBSCRIPTIONS_COLLECTION: str = "subscriptions"
     
-    class Config:
-        env_file = ".env.local"
-        case_sensitive = True
+    # ===== GCP Configuration =====
+    GOOGLE_PROJECT_ID: str = ""
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
+    
+    # ===== Gemini AI Configuration =====
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_API_KEY: str = ""  # ✅ ADD THIS: For Gemini API key
+    
+    # ===== Feature Flags =====
+    ENABLE_ANALYSIS_CACHING: bool = True
+    ANALYSIS_CACHE_TTL: int = 3600  # 1 hour
+    
+    # ===== Rate Limiting =====
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW: int = 60  # seconds
+    
+    # ===== Logging =====
+    LOG_FILE: str = "logs/app.log"
+    
+    # ===== Helper Methods =====
+    
+    def is_production(self) -> bool:
+        """Check if running in production"""
+        return self.ENVIRONMENT.lower() == "production"
+    
+    def get_mongodb_connection_string(self) -> str:
+        """Get MongoDB connection string"""
+        return self.MONGODB_URL
+    
+    def validate_mongodb_config(self) -> bool:
+        """Validate MongoDB configuration"""
+        if not self.MONGODB_URL:
+            raise ValueError("MONGODB_URL not configured in .env.local")
+        if not self.DATABASE_NAME:
+            raise ValueError("DATABASE_NAME not configured in .env.local")
+        return True
+    
+    def validate_secrets(self) -> bool:
+        """Validate critical secrets"""
+        if not self.SECRET_KEY:
+            raise ValueError("SECRET_KEY not configured in .env.local")
+        if not self.ENCRYPTION_KEY:
+            raise ValueError("ENCRYPTION_KEY not configured in .env.local")
+        return True
 
-@lru_cache()
-def get_settings() -> Settings:
-    """Get cached settings instance"""
-    return Settings()
 
-# Export for easy importing
-settings = get_settings()
+# Global settings instance
+settings = Settings()
