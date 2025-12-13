@@ -1,9 +1,8 @@
 # ============================================================================
-# AuditAI Backend Requirements
-# Complete and tested dependencies
+# AuditAI Backend Requirements - COMPLETE VERSION
 # ============================================================================
 
-# ===== FastAPI & ASGI Server =====
+# ===== Core FastAPI =====
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
@@ -11,17 +10,14 @@ python-multipart==0.0.6
 # ===== Pydantic (Data Validation) =====
 pydantic==2.5.0
 pydantic-settings==2.1.0
-email-validator==2.1.0
 
 # ===== Database (MongoDB) =====
 pymongo==4.6.0
-# Uncomment below if you want async MongoDB support
-# motor==3.3.2
 
 # ===== Authentication & Security =====
-passlib[bcrypt]==1.7.4          # Password hashing with bcrypt
-python-jose[cryptography]==3.3.0 # JWT token handling
-cryptography==41.0.7             # Encryption for credentials
+passlib[bcrypt]==1.7.4              # Password hashing
+python-jose[cryptography]==3.3.0    # JWT tokens
+cryptography==41.0.7                # Credential encryption
 
 # ===== Google Cloud Platform =====
 google-cloud-compute==1.15.0
@@ -33,25 +29,23 @@ google-cloud-bigquery==3.13.0
 
 # ===== Google AI (Gemini) =====
 google-generativeai==0.3.2
-google-ai-generativelanguage==0.4.0
 
 # ===== HTTP Clients =====
 httpx==0.25.2
 aiohttp==3.9.1
-requests==2.31.0
 
 # ===== Utilities =====
 python-dotenv==1.0.0
-PyJWT==2.8.0
 
-# ===== Development Tools (Optional) =====
-# Uncomment for development
-# pytest==7.4.3
-# pytest-asyncio==0.21.1
-# black==23.12.1
-# flake8==6.1.0
-# mypy==1.7.1
+# Core GCP libraries (you probably already have these)
+google-cloud-compute>=1.14.0
+google-cloud-storage>=2.10.0
+google-auth>=2.23.0
 
-# ===== Production Monitoring (Optional) =====
-# sentry-sdk==1.39.1
-# prometheus-client==0.19.0
+# Additional libraries for new features
+google-cloud-billing>=1.12.0          # For billing data
+google-cloud-monitoring>=2.16.0        # For resource metrics
+google-cloud-recommender>=2.14.0       # For AI recommendations
+
+# Optional but recommended
+google-api-python-client>=2.100.0      # For additional GCP APIs

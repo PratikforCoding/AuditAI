@@ -1,15 +1,16 @@
 """
 Production-Ready Recommendation Engine
+UPDATED: Supports per-user credentials
 Combines GCP APIs with domain expertise
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 from datetime import datetime
 import uuid
 import logging
 from enum import Enum
 
-from backend.models.schemas import Recommendation, Severity
+from backend.models.schemas import Recommendation
 from backend.services.gcp_billing_service import GCPBillingService
 from backend.services.gcp_monitoring_service import GCPMonitoringService
 from backend.services.gcp_recommender_service import GCPRecommenderService
@@ -25,24 +26,43 @@ class RecommendationType(str, Enum):
     COST_OPTIMIZATION = "cost_optimization"
 
 
+class Severity(str, Enum):
+    """Severity levels for recommendations"""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 class ProductionRecommendationEngine:
     """
     Production-grade recommendation engine using official GCP APIs
     All recommendations are based on actual data, not guesses
+    UPDATED: Supports per-user credentials
     """
     
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str, user_credentials: Optional[Dict] = None):
+        """
+        Initialize recommendation engine
+        
+        Args:
+            project_id: GCP Project ID
+            user_credentials: Optional dict with user's service account JSON
+        """
         self.project_id = project_id
-        self.billing_service = GCPBillingService(project_id)
-        self.monitoring_service = GCPMonitoringService(project_id)
-        self.recommender_service = GCPRecommenderService(project_id)
+        self.user_credentials = user_credentials
+        
+        # Initialize services with user credentials
+        self.billing_service = GCPBillingService(project_id, user_credentials)
+        self.monitoring_service = GCPMonitoringService(project_id, user_credentials)
+        self.recommender_service = GCPRecommenderService(project_id, user_credentials)
         
         # Thresholds based on industry standards and GCP best practices
         self.IDLE_CPU_THRESHOLD = 5.0  # % utilization
         self.IDLE_DAYS_THRESHOLD = 30  # days of <5% utilization
         self.MIN_MONTHLY_SAVINGS = 10.0  # Don't recommend if savings < $10/month
         
-    def analyze_infrastructure(self, days: int = 30) -> List[Recommendation]:
+    def analyze_infrastructure(self, days: int = 30) -> List[Dict]:
         """
         Complete analysis using official GCP data
         Returns high-confidence recommendations with real numbers
@@ -52,17 +72,19 @@ class ProductionRecommendationEngine:
         try:
             # Step 1: Get official GCP recommendations
             logger.info("Fetching official GCP recommendations...")
-            gcp_recs = self.recommender_service.get_all_recommendations()
-            recommendations.extend(self._convert_gcp_recommendations(gcp_recs))
+            try:
+                gcp_recs = self.recommender_service.get_all_recommendations()
+                recommendations.extend(self._convert_gcp_recommendations(gcp_recs))
+            except Exception as e:
+                logger.error(f"Failed to fetch GCP recommendations: {e}")
             
-            # Step 2: Get real metrics for deeper analysis
-            logger.info("Fetching monitoring metrics...")
-            # (Would integrate with actual resource list from GCP)
-            
-            # Step 3: Get actual costs
+            # Step 2: Get actual costs
             logger.info("Fetching billing data...")
-            cost_data = self.billing_service.get_project_total_cost(days=30)
-            logger.info(f"Project costs: ${cost_data['total_cost']} in last 30 days")
+            try:
+                cost_data = self.billing_service.get_project_total_cost(days=30)
+                logger.info(f"Project costs: ${cost_data.get('total_cost', 0)} in last 30 days")
+            except Exception as e:
+                logger.error(f"Failed to fetch cost data: {e}")
             
             return recommendations
             
@@ -70,7 +92,7 @@ class ProductionRecommendationEngine:
             logger.error(f"Error analyzing infrastructure: {e}")
             raise
     
-    def _convert_gcp_recommendations(self, gcp_recs: List[Dict]) -> List[Recommendation]:
+    def _convert_gcp_recommendations(self, gcp_recs: List[Dict]) -> List[Dict]:
         """Convert official GCP recommendations to our schema"""
         recommendations = []
         
@@ -86,27 +108,27 @@ class ProductionRecommendationEngine:
             risk_level = self._calculate_risk_level(rec)
             
             # Create recommendation with real data
-            recommendation = Recommendation(
-                id=str(uuid.uuid4()),
-                resource_id=rec.get('resource_id', 'unknown'),
-                title=rec['title'],
-                description=rec['description'],
-                recommendation_type=self._classify_recommendation(rec),
-                severity=self._determine_severity(rec, monthly_savings),
-                monthly_savings=monthly_savings,
-                annual_savings=rec.get('estimated_annual_savings', 0),
-                confidence=self._map_confidence(rec.get('confidence')),
-                risk_level=risk_level,
-                difficulty=self._determine_difficulty(rec),
-                action_items=rec.get('actions', []),
-                source='GCP Recommender API',
-                recommender_id=rec.get('recommender', 'unknown'),
-                created_at=datetime.utcnow(),
-                data_source='production_api'
-            )
+            recommendation = {
+                "id": str(uuid.uuid4()),
+                "resource_id": rec.get('resource_id', 'unknown'),
+                "title": rec['title'],
+                "description": rec['description'],
+                "recommendation_type": self._classify_recommendation(rec),
+                "severity": self._determine_severity(rec, monthly_savings),
+                "monthly_savings": monthly_savings,
+                "annual_savings": rec.get('estimated_annual_savings', 0),
+                "confidence": self._map_confidence(rec.get('confidence')),
+                "risk_level": risk_level,
+                "difficulty": self._determine_difficulty(rec),
+                "action_items": rec.get('actions', []),
+                "source": 'GCP Recommender API',
+                "recommender_id": rec.get('recommender', 'unknown'),
+                "created_at": datetime.utcnow().isoformat(),
+                "data_source": 'production_api'
+            }
             
             recommendations.append(recommendation)
-            logger.info(f"Added recommendation: {recommendation.title} | Savings: ${monthly_savings}/month")
+            logger.info(f"Added recommendation: {recommendation['title']} | Savings: ${monthly_savings}/month")
         
         return recommendations
     
@@ -123,7 +145,7 @@ class ProductionRecommendationEngine:
         else:
             return RecommendationType.COST_OPTIMIZATION
     
-    def _determine_severity(self, rec: Dict, monthly_savings: float) -> Severity:
+    def _determine_severity(self, rec: Dict, monthly_savings: float) -> str:
         """
         Determine severity based on:
         1. GCP's confidence
@@ -135,15 +157,15 @@ class ProductionRecommendationEngine:
         
         # Map GCP severity + savings to our severity scale
         if gcp_severity == 'CRITICAL' or monthly_savings > 1000:
-            return Severity.CRITICAL
+            return Severity.CRITICAL.value
         elif gcp_severity == 'HIGH' or monthly_savings > 500:
-            return Severity.HIGH
+            return Severity.HIGH.value
         elif gcp_severity == 'MEDIUM' or monthly_savings > 100:
-            return Severity.MEDIUM
+            return Severity.MEDIUM.value
         else:
-            return Severity.LOW
+            return Severity.LOW.value
     
-    def _calculate_risk_level(self, rec: Dict) -> Severity:
+    def _calculate_risk_level(self, rec: Dict) -> str:
         """
         Risk of implementing this recommendation
         Based on action type and resource criticality
@@ -152,15 +174,15 @@ class ProductionRecommendationEngine:
         
         # Deleting resources = HIGH risk (data loss potential)
         if 'delete' in title or 'remove' in title:
-            return Severity.HIGH
+            return Severity.HIGH.value
         
         # Resizing/modifying = MEDIUM risk (downtime, performance)
         elif 'resize' in title or 'change' in title or 'modify' in title:
-            return Severity.MEDIUM
+            return Severity.MEDIUM.value
         
         # Security fixes = LOW risk (no downtime)
         else:
-            return Severity.LOW
+            return Severity.LOW.value
     
     def _determine_difficulty(self, rec: Dict) -> str:
         """
@@ -211,21 +233,28 @@ class ProductionRecommendationEngine:
         try:
             recommendations = self.analyze_infrastructure()
             
-            total_monthly_savings = sum(r.monthly_savings for r in recommendations)
-            total_annual_savings = sum(r.annual_savings for r in recommendations)
+            total_monthly_savings = sum(
+                r.get('monthly_savings', 0) for r in recommendations
+            )
+            total_annual_savings = sum(
+                r.get('annual_savings', 0) for r in recommendations
+            )
             
             by_severity = {}
             for severity in Severity:
-                count = len([r for r in recommendations if r.severity == severity])
+                count = len([
+                    r for r in recommendations 
+                    if r.get('severity') == severity.value
+                ])
                 if count > 0:
-                    by_severity[severity] = count
+                    by_severity[severity.value] = count
             
             return {
                 'total_recommendations': len(recommendations),
                 'total_monthly_savings': round(total_monthly_savings, 2),
                 'total_annual_savings': round(total_annual_savings, 2),
                 'by_severity': by_severity,
-                'recommendations': [r.dict() for r in recommendations],
+                'recommendations': recommendations,
                 'generated_at': datetime.utcnow().isoformat()
             }
         except Exception as e:

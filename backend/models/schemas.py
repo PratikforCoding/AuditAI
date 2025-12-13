@@ -5,7 +5,7 @@ Pydantic models for request/response validation
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-
+from enum import Enum
 
 # ===== Authentication Models =====
 
@@ -164,3 +164,16 @@ class ComponentStatus(BaseModel):
     name: str
     status: str  # healthy, unhealthy, degraded
     message: Optional[str] = None
+
+class Severity(str, Enum):
+    """Severity levels for recommendations"""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+class ApiResponse(BaseModel):
+    """Standard API response wrapper"""
+    status: str
+    message: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None

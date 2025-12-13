@@ -1,15 +1,19 @@
 """
-AI Agent Endpoints - Agentic AI API Routes
+AI Agent Endpoints - COMPLETE VERSION
 Provides endpoints for AI-powered infrastructure analysis and recommendations
+All endpoints properly use USER credentials for multitenant isolation
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from backend.middleware.auth import get_current_user
+from backend.models.repositories import UserRepository
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
 from backend.services.gemini_agent_service import GeminiAgentService
 from backend.models.schemas import ApiResponse
 from backend.utils.logger import get_logger
+import json
 
 logger = get_logger(__name__)
 
@@ -101,6 +105,48 @@ class AuditReportResponse(BaseModel):
 
 
 # ============================================================================
+# Helper Function: Get User Credentials
+# ============================================================================
+
+def get_user_credentials(user_id: str) -> dict:
+    """
+    Get and decrypt user's GCP credentials
+    
+    Args:
+        user_id: User's unique ID from JWT token
+    
+    Returns:
+        {
+            'project_id': str,
+            'service_account_json': dict
+        }
+    
+    Raises:
+        HTTPException: If user not found or credentials not configured
+    """
+    # Get user from database
+    user = UserRepository.find_by_id(user_id)
+    if not user or not user.gcp_credentials:
+        raise HTTPException(
+            status_code=400,
+            detail="GCP credentials not configured. Please add credentials first."
+        )
+    
+    # Decrypt user's credentials
+    from backend.utils.encryption import CredentialEncryption
+    encryptor = CredentialEncryption()
+    user_creds = encryptor.decrypt(user.gcp_credentials)
+    
+    # Parse service account JSON
+    sa_json = json.loads(user_creds['service_account_json'])
+    
+    return {
+        'project_id': user.gcp_project_id,
+        'service_account_json': sa_json
+    }
+
+
+# ============================================================================
 # AI Agent Endpoints
 # ============================================================================
 
@@ -110,7 +156,10 @@ class AuditReportResponse(BaseModel):
     summary="Analyze Infrastructure with AI",
     description="Use AI agent to analyze GCP infrastructure and answer questions"
 )
-async def analyze_infrastructure(request: AnalysisRequest):
+async def analyze_infrastructure(
+    request: AnalysisRequest, 
+    user_id: str = Depends(get_current_user)
+):
     """
     Analyze infrastructure using Gemini AI with tool use.
     
@@ -133,10 +182,16 @@ async def analyze_infrastructure(request: AnalysisRequest):
     - Implementation suggestions
     """
     try:
-        logger.info(f"Analyzing infrastructure for project: {request.project_id}")
+        logger.info(f"Analyzing infrastructure for user: {user_id}")
         
-        # Initialize AI agent service
-        agent = GeminiAgentService(request.project_id)
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
         
         # Run interactive analysis
         result = agent.analyze_infrastructure_interactively(
@@ -178,7 +233,9 @@ async def analyze_infrastructure(request: AnalysisRequest):
     summary="Get AI Optimization Suggestions",
     description="Get AI-powered optimization suggestions for reducing costs"
 )
-async def get_suggestions(project_id: str):
+async def get_suggestions(
+    user_id: str = Depends(get_current_user)
+):
     """
     Get AI-powered optimization suggestions.
     
@@ -194,10 +251,16 @@ async def get_suggestions(project_id: str):
     - ROI estimates
     """
     try:
-        logger.info(f"Generating suggestions for project: {project_id}")
+        logger.info(f"Generating suggestions for user: {user_id}")
         
-        # Initialize AI agent service
-        agent = GeminiAgentService(project_id)
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
         
         # Get suggestions
         result = agent.get_optimization_suggestions()
@@ -234,7 +297,11 @@ async def get_suggestions(project_id: str):
     summary="Execute Optimization Plan",
     description="Execute an optimization plan suggested by AI"
 )
-async def execute_plan(request: ExecutePlanRequest, background_tasks: BackgroundTasks):
+async def execute_plan(
+    request: ExecutePlanRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user)
+):
     """
     Execute an optimization plan.
     
@@ -255,9 +322,12 @@ async def execute_plan(request: ExecutePlanRequest, background_tasks: Background
     """
     try:
         logger.info(
-            f"Executing plan for project: {request.project_id} "
+            f"Executing plan for user: {user_id} "
             f"(dry_run={request.dry_run})"
         )
+        
+        # ✅ Verify user has credentials
+        creds = get_user_credentials(user_id)
         
         if request.dry_run:
             return ApiResponse(
@@ -266,7 +336,7 @@ async def execute_plan(request: ExecutePlanRequest, background_tasks: Background
                 data={
                     "mode": "dry_run",
                     "plan": request.plan,
-                    "project_id": request.project_id,
+                    "project_id": creds['project_id'],
                     "changes": {
                         "status": "simulated",
                         "message": "Use dry_run=false to execute actual changes"
@@ -285,12 +355,14 @@ async def execute_plan(request: ExecutePlanRequest, background_tasks: Background
                 data={
                     "mode": "execution",
                     "plan": request.plan,
-                    "project_id": request.project_id,
+                    "project_id": creds['project_id'],
                     "status": "in_progress",
                     "estimated_duration": "5-10 minutes"
                 }
             )
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Plan execution failed: {str(e)}")
         raise HTTPException(
@@ -306,7 +378,7 @@ async def execute_plan(request: ExecutePlanRequest, background_tasks: Background
     description="Generate comprehensive infrastructure audit report"
 )
 async def generate_audit_report(
-    project_id: str,
+    user_id: str = Depends(get_current_user),
     days: int = 30
 ):
     """
@@ -323,14 +395,19 @@ async def generate_audit_report(
     - Detailed analysis
     
     **Query Parameters:**
-    - project_id: GCP Project ID
     - days: Number of days to analyze (default 30)
     """
     try:
-        logger.info(f"Generating audit report for project: {project_id}")
+        logger.info(f"Generating audit report for user: {user_id}")
         
-        # Initialize AI agent service
-        agent = GeminiAgentService(project_id)
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
         
         # Generate report
         result = agent.generate_audit_report(days=days)
@@ -384,6 +461,175 @@ async def agent_health():
             ]
         }
     )
+
+
+@router.get(
+    "/cost-analysis",
+    response_model=ApiResponse,
+    summary="Get Cost Analysis",
+    description="Get detailed cost analysis for user's GCP project"
+)
+async def get_cost_analysis(
+    user_id: str = Depends(get_current_user),
+    days: int = 30
+):
+    """
+    Get detailed cost analysis including:
+    - Total costs
+    - Cost breakdown by service
+    - Cost trends
+    - Projections
+    
+    **Query Parameters:**
+    - days: Number of days to analyze (default 30)
+    """
+    try:
+        logger.info(f"Getting cost analysis for user: {user_id}")
+        
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
+        
+        # Get cost analysis from recommendation engine
+        result = agent.recommendation_engine.get_cost_analysis()
+        
+        return ApiResponse(
+            status="success",
+            message="Cost analysis retrieved",
+            data={
+                "cost_analysis": result,
+                "project_id": creds['project_id'],
+                "days_analyzed": days
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get cost analysis: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get cost analysis: {str(e)}"
+        )
+
+
+@router.get(
+    "/recommendations-summary",
+    response_model=ApiResponse,
+    summary="Get Recommendations Summary",
+    description="Get summary of all recommendations with savings calculations"
+)
+async def get_recommendations_summary(
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Get summary of all recommendations including:
+    - Total number of recommendations
+    - Total potential savings
+    - Breakdown by severity
+    - Prioritized list
+    """
+    try:
+        logger.info(f"Getting recommendations summary for user: {user_id}")
+        
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
+        
+        # Get recommendations summary
+        result = agent.recommendation_engine.get_recommendations_summary()
+        
+        return ApiResponse(
+            status="success",
+            message="Recommendations summary retrieved",
+            data={
+                "summary": result,
+                "project_id": creds['project_id']
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get recommendations summary: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get recommendations summary: {str(e)}"
+        )
+
+
+@router.post(
+    "/interactive-chat",
+    response_model=ApiResponse,
+    summary="Interactive AI Chat",
+    description="Have an interactive conversation with AI about your infrastructure"
+)
+async def interactive_chat(
+    query: str,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Interactive AI chat for infrastructure questions.
+    
+    The AI can answer follow-up questions and provide detailed explanations.
+    
+    **Example queries:**
+    - "Explain the first recommendation in detail"
+    - "What's the risk of deleting idle instances?"
+    - "How do I implement the cost optimization plan?"
+    """
+    try:
+        logger.info(f"Interactive chat for user: {user_id}")
+        
+        # ✅ Get USER's credentials
+        creds = get_user_credentials(user_id)
+        
+        # ✅ Initialize with USER's credentials
+        agent = GeminiAgentService(
+            project_id=creds['project_id'],
+            user_credentials=creds['service_account_json']
+        )
+        
+        # Run interactive analysis
+        result = agent.analyze_infrastructure_interactively(
+            query=query,
+            days=30
+        )
+        
+        if result["status"] != "success":
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "Chat failed")
+            )
+        
+        return ApiResponse(
+            status="success",
+            message="Chat response generated",
+            data={
+                "query": query,
+                "response": result["analysis"],
+                "project_id": creds['project_id']
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Interactive chat failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat failed: {str(e)}"
+        )
 
 
 # Export router for inclusion in main app

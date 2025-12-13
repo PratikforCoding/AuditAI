@@ -1,5 +1,6 @@
 """
 GCP Cloud Billing API Service
+UPDATED: Supports per-user credentials
 Fetches real cost data from Cloud Billing export (BigQuery)
 """
 
@@ -8,17 +9,40 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from google.cloud import bigquery
 from google.cloud.exceptions import GoogleCloudError
+from google.oauth2 import service_account
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class GCPBillingService:
-    """Service to fetch actual costs from GCP Cloud Billing"""
+    """Service to fetch actual costs from GCP Cloud Billing
+    UPDATED: Supports per-user credentials"""
     
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str, user_credentials: Optional[Dict] = None):
+        """
+        Initialize billing service
+        
+        Args:
+            project_id: GCP Project ID
+            user_credentials: Optional dict with user's service account JSON
+        """
         self.project_id = project_id
-        self.bq_client = bigquery.Client(project=project_id)
+        
+        # Initialize BigQuery client with credentials
+        if user_credentials:
+            logger.info(f"🔑 Using user credentials for billing service: {project_id}")
+            credentials = service_account.Credentials.from_service_account_info(
+                user_credentials
+            )
+            self.bq_client = bigquery.Client(
+                project=project_id, 
+                credentials=credentials
+            )
+        else:
+            logger.info(f"🔧 Using environment credentials for billing service: {project_id}")
+            self.bq_client = bigquery.Client(project=project_id)
+        
         # Make sure billing export is enabled in your GCP project
         # Settings → Billing → Billing export to BigQuery
         self.billing_dataset = "billing_export"  # Default dataset name
@@ -29,24 +53,8 @@ class GCPBillingService:
         resource_type: str,
         days: int = 30
     ) -> Dict[str, float]:
-        """
-        Get actual cost for a specific resource from past N days
-        
-        Args:
-            resource_id: e.g., 'instance-1', 'disk-name'
-            resource_type: e.g., 'gce_instance', 'storage_volume'
-            days: lookback period (default 30 days)
-            
-        Returns:
-            {
-                'daily_average': float,
-                'monthly_projection': float,
-                'total_30_days': float,
-                'currency': 'USD'
-            }
-        """
+        """Get actual cost for a specific resource from past N days"""
         try:
-            # Query from billing export table
             query = f"""
             SELECT
                 DATE(DATE(TIMESTAMP_MICROS(usage_start_time))) as date,
@@ -106,7 +114,7 @@ class GCPBillingService:
                 SUM(CAST(cost as FLOAT64)) as total_cost,
                 COUNT(DISTINCT resource.name) as resource_count,
                 COUNT(DISTINCT service.id) as service_count,
-                array_agg(DISTINCT service.description) as services
+                ARRAY_AGG(DISTINCT service.description) as services
             FROM
                 `{self.project_id}.{self.billing_dataset}.gcp_billing_export_v1_*`
             WHERE
@@ -114,7 +122,7 @@ class GCPBillingService:
             """
             
             query_job = self.bq_client.query(query)
-            result = list(query_job.result())
+            result = list(query_job.result())[0]
             
             total_cost = float(result['total_cost']) if result['total_cost'] else 0.0
             
