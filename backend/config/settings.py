@@ -4,6 +4,7 @@ Updated with MongoDB Atlas configuration
 FIXED for Pydantic v2
 """
 
+import os  # ✅ ADD THIS IMPORT
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 from typing import Optional
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
     
     # ===== Server =====
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = int(os.getenv("PORT", 8000))  # ✅ CHANGED: Support Render's PORT env var
     FRONTEND_URL: str = "http://localhost:3000"
     
     # ===== Security =====
@@ -60,6 +61,7 @@ class Settings(BaseSettings):
     # ===== Gemini AI Configuration =====
     GEMINI_MODEL: str = "gemini-2.5-flash"
     GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_API_KEY: str = ""  # ✅ ADD THIS: For Gemini API key
     
     # ===== Feature Flags =====
     ENABLE_ANALYSIS_CACHING: bool = True
