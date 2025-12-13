@@ -248,6 +248,18 @@ async def get_gcp_setup_guide():
 # ============================================================================
 # CREDENTIALS VALIDATION (BEFORE SAVING)
 # ============================================================================
+@router.post("/test-upload")
+async def test_upload(
+    project_id: str = Form(None),
+    file: UploadFile = File(None)
+):
+    """TEST ENDPOINT - No auth, just test"""
+    return {
+        "received_project_id": project_id,
+        "received_file": file.filename if file else None,
+        "file_is_none": file is None,
+        "project_id_is_none": project_id is None
+    }
 
 @router.post("/validate-credentials")
 async def validate_credentials_before_save(
@@ -434,16 +446,15 @@ async def validate_credentials_before_save(
 
 @router.post("/upload-service-account")
 async def upload_service_account_file(
-    project_id: str = Body(..., description="GCP Project ID"),
-    file: UploadFile = File(..., description="Service account JSON file"),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
+    project_id: str = Form(...),
+    file: UploadFile = File(...)
 ):
-    """
-    Upload service account JSON file directly
-    FIXED: Properly validates credentials using uploaded JSON
-    """
+    """Upload service account JSON file directly"""
     try:
         logger.info(f"Processing file upload for user: {user_id}")
+        logger.info(f"Received project_id: {project_id}")
+        logger.info(f"Received file: {file.filename}")
         
         # Validate file type
         if not file.filename.endswith('.json'):
@@ -457,7 +468,7 @@ async def upload_service_account_file(
         
         try:
             service_account_json = content.decode('utf-8')
-            sa_dict = json.loads(service_account_json)  # Parse to dict
+            sa_dict = json.loads(service_account_json)
         except UnicodeDecodeError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -494,17 +505,15 @@ async def upload_service_account_file(
                 detail=f"Project ID mismatch: You entered '{project_id}' but JSON contains '{json_project_id}'. Please use '{json_project_id}'"
             )
         
-        # ✅ FIX: Validate GCP credentials using the uploaded JSON
+        # Validate GCP credentials
         try:
             logger.info(f"Validating GCP credentials for project: {project_id}")
             
-            # Initialize GCP client with the service account dict
             gcp_client = GCPClient(
                 project_id=project_id,
-                service_account_info=sa_dict  # ← Pass the dict directly
+                service_account_info=sa_dict
             )
             
-            # Try to verify credentials
             if not gcp_client.verify_credentials():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -526,7 +535,7 @@ async def upload_service_account_file(
         encryptor = CredentialEncryption()
         encrypted_creds = encryptor.encrypt({
             "project_id": project_id,
-            "service_account_json": service_account_json  # Store as string
+            "service_account_json": service_account_json
         })
         
         # Save to database
@@ -549,7 +558,7 @@ async def upload_service_account_file(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ File upload failed: {e}")
+        logger.error(f"❌ File upload failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process file upload: {str(e)}"
