@@ -37,40 +37,33 @@ class AuthService:
     def hash_password(password: str) -> str:
         """
         Hash password using bcrypt (industry standard, secure)
-        
-        Args:
-            password: Plain text password
-        
-        Returns:
-            Bcrypt hashed password (includes salt automatically)
-        
-        Example:
-            hashed = AuthService.hash_password("MySecurePass123")
         """
         try:
+            # Bcrypt has 72-byte limit, ensure password fits
+            password_bytes = password.encode('utf-8')
+            if len(password_bytes) > 72:
+                logger.warning(f"Password exceeds 72 bytes ({len(password_bytes)}), truncating")
+                password = password_bytes[:72].decode('utf-8', errors='ignore')
+            
             hashed = pwd_context.hash(password)
             logger.info("Password hashed successfully")
             return hashed
         except Exception as e:
             logger.error(f"Password hashing failed: {e}")
             raise
+
     
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """
         Verify password against bcrypt hash
-        
-        Args:
-            plain_password: Plain text password from user
-            hashed_password: Hashed password from database
-        
-        Returns:
-            True if password matches, False otherwise
-        
-        Example:
-            is_valid = AuthService.verify_password("MySecurePass123", hashed)
         """
         try:
+            # Bcrypt has 72-byte limit, ensure password fits
+            password_bytes = plain_password.encode('utf-8')
+            if len(password_bytes) > 72:
+                plain_password = password_bytes[:72].decode('utf-8', errors='ignore')
+            
             is_valid = pwd_context.verify(plain_password, hashed_password)
             logger.info(f"Password verification: {'success' if is_valid else 'failed'}")
             return is_valid
