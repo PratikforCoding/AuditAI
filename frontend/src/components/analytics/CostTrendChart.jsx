@@ -10,17 +10,8 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
-const data = [
-    { name: "Dec", cost: 2100 },
-    { name: "Jan", cost: 1800 },
-    { name: "Feb", cost: 2150 },
-    { name: "Mar", cost: 1500 },
-    { name: "Apr", cost: 2250 },
-    { name: "May", cost: 2400 },
-    { name: "Jun", cost: 2650 },
-];
-
-const CostTrendChart = () => {
+const CostTrendChart = ({ data }) => {
+    if (!data) return null; // or loading state
     return (
         <div className="bg-card border border-border-light rounded-xl p-6 shadow-sm">
             <h3 className="text-lg font-semibold text-foreground mb-4">
@@ -36,7 +27,7 @@ const CostTrendChart = () => {
                             strokeDasharray="3 3"
                             stroke="#333"
                             vertical={false}
-                            // horizontal={false}
+                        // horizontal={false}
                         />
                         <XAxis
                             dataKey="name"

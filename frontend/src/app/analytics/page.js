@@ -7,14 +7,32 @@ import TopResourcesTable from "@/components/analytics/TopResourcesTable";
 import SavingsCard from "@/components/analytics/SavingsCard";
 import { Download, Calendar } from "lucide-react";
 
+import useAnalyticsStore from "@/store/useAnalyticsStore";
+import { useEffect } from "react";
+
 export default function AnalyticsPage() {
-    const [isRefreshing, setIsRefreshing] = useState(false);
+    const {
+        fetchAnalyticsData,
+        isLoading: isRefreshing,
+        costTrend,
+        costDistribution,
+        topResources,
+        savingsTypes
+    } = useAnalyticsStore();
+
+    useEffect(() => {
+        fetchAnalyticsData();
+
+        // Auto-refresh every 10 seconds to simulate live data
+        const interval = setInterval(() => {
+            fetchAnalyticsData();
+        }, 10000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     const handleRefresh = async () => {
-        setIsRefreshing(true);
-        // Simulate refresh
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        setIsRefreshing(false);
+        await fetchAnalyticsData();
     };
 
     const handleExport = () => {
@@ -56,11 +74,11 @@ export default function AnalyticsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                     {/* Cost Trend - Takes 2 columns on large screens */}
                     <div className="lg:col-span-2">
-                        <CostTrendChart />
+                        <CostTrendChart data={costTrend} />
                     </div>
                     {/* Cost Distribution - Takes 1 column */}
                     <div className="lg:col-span-1">
-                        <CostDistributionChart />
+                        <CostDistributionChart data={costDistribution} />
                     </div>
                 </div>
 
@@ -68,11 +86,11 @@ export default function AnalyticsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Top Resources - Takes 2 columns */}
                     <div className="lg:col-span-2">
-                        <TopResourcesTable />
+                        <TopResourcesTable data={topResources} />
                     </div>
                     {/* Savings Card - Takes 1 column */}
                     <div className="lg:col-span-1">
-                        <SavingsCard />
+                        <SavingsCard data={savingsTypes} />
                     </div>
                 </div>
             </div>

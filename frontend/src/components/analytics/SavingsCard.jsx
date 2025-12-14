@@ -1,7 +1,12 @@
 import React from "react";
 import { PiggyBank, ArrowRight, CheckCircle2 } from "lucide-react";
 
-const SavingsCard = () => {
+const SavingsCard = ({ data }) => {
+    const savingsPotential = data ? data.reduce((acc, curr) => acc + curr.amount, 0) : 0;
+    const currentMonthly = 2450; // Base mock or passed prop
+    const projected = currentMonthly - savingsPotential;
+    const percentage = Math.round((savingsPotential / currentMonthly) * 100);
+
     return (
         <div className="bg-gradient-to-br from-[#1a1a1a] to-[#0e0e0e] border border-border-light rounded-xl p-6 shadow-sm relative overflow-hidden">
             {/* Background decoration */}
@@ -18,7 +23,7 @@ const SavingsCard = () => {
                 <div className="flex justify-between items-center py-2 border-b border-neutral-800">
                     <span className="text-neutral-400">Current Monthly</span>
                     <span className="text-xl font-bold text-foreground">
-                        $2,450
+                        ${currentMonthly.toLocaleString()}
                     </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-neutral-800">
@@ -26,7 +31,7 @@ const SavingsCard = () => {
                         If recommendations applied
                     </span>
                     <span className="text-xl font-bold text-green-400">
-                        $1,670
+                        ${projected.toLocaleString()}
                     </span>
                 </div>
 
@@ -36,22 +41,22 @@ const SavingsCard = () => {
                             Potential Savings
                         </span>
                         <span className="text-3xl font-extrabold text-green-400">
-                            $780<span className="text-lg text-green-500/70 font-normal ml-1">/mo</span>
+                            ${savingsPotential}<span className="text-lg text-green-500/70 font-normal ml-1">/mo</span>
                         </span>
                     </div>
                     <div className="w-full bg-neutral-800 rounded-full h-2 mt-2">
                         <div
                             className="bg-green-500 h-2 rounded-full"
-                            style={{ width: "32%" }}
+                            style={{ width: `${percentage}%` }}
                         ></div>
                     </div>
-                    <p className="text-right text-xs text-green-500/70 mt-1">32% reduction</p>
+                    <p className="text-right text-xs text-green-500/70 mt-1">{percentage}% reduction</p>
                 </div>
 
                 <div className="flex justify-between items-center pt-2">
                     <span className="text-neutral-400">Annual Projected</span>
                     <span className="text-lg font-bold text-foreground">
-                        $9,360
+                        ${(projected * 12).toLocaleString()}
                     </span>
                 </div>
             </div>

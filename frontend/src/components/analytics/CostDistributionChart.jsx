@@ -2,13 +2,6 @@
 import React from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
-const data = [
-    { name: "Compute", value: 1470, color: "#db2777" }, // Pink
-    { name: "Storage", value: 612, color: "#8b5cf6" }, // Violet
-    { name: "Network", value: 245, color: "#3b82f6" }, // Blue
-    { name: "Other", value: 123, color: "#10b981" }, // Emerald
-];
-
 const renderCustomLabel = ({
     cx,
     cy,
@@ -36,7 +29,14 @@ const renderCustomLabel = ({
     );
 };
 
-const CostDistributionChart = () => {
+const CostDistributionChart = ({ data }) => {
+    // Add default colors if not present in data
+    const enhancedData = data?.map((item, index) => ({
+        ...item,
+        color: item.color || ["#db2777", "#8b5cf6", "#3b82f6", "#10b981", "#f59e0b"][index % 5]
+    }));
+
+    if (!enhancedData) return null;
     return (
         <div className="bg-card border border-border-light rounded-xl p-6 shadow-sm flex flex-col">
             <h3 className="text-lg font-semibold text-foreground mb-4">
@@ -46,7 +46,7 @@ const CostDistributionChart = () => {
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie
-                            data={data}
+                            data={enhancedData}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -56,7 +56,7 @@ const CostDistributionChart = () => {
                             dataKey="value"
                             stroke="none"
                         >
-                            {data.map((entry, index) => (
+                            {enhancedData.map((entry, index) => (
                                 <Cell
                                     key={`cell-${index}`}
                                     fill={entry.color}

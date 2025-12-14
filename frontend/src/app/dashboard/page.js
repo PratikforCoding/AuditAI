@@ -19,46 +19,9 @@ import MetricCard from "@/components/dashboard-components/MetricCard";
 import RecentAuditsTable from "@/components/dashboard-components/RecentAuditsTable";
 import DashboardHeader from "@/components/dashboard-components/DashboardHeader";
 import DashboardLoader from "@/components/dashboard-components/DashboardLoader";
+import useDashboardStore from "@/store/useDashboardStore";
 
-const initialMockData = {
-    user: { name: "Audit User" },
-    total_resources: 42,
-    running_instances: 8,
-    idle_resources: 34,
-    monthly_cost: 2450,
-    potential_savings: 780,
-    last_audit: "2025-12-09T10:30:00Z",
-    recent_audits: [
-        {
-            id: "audit_1",
-            date: "2025-12-09",
-            resources_scanned: 42,
-            issues_found: 5,
-            savings: 240,
-        },
-        {
-            id: "audit_2",
-            date: "2025-12-08",
-            resources_scanned: 40,
-            issues_found: 0,
-            savings: 180,
-        },
-        {
-            id: "audit_3",
-            date: "2025-12-07",
-            resources_scanned: 38,
-            issues_found: 7,
-            savings: 360,
-        },
-        {
-            id: "audit_4",
-            date: "2025-12-06",
-            resources_scanned: 35,
-            issues_found: 2,
-            savings: 100,
-        },
-    ],
-};
+// Removed initialMockData
 
 //Helper function to calculate time difference
 const timeSince = (dateString) => {
@@ -80,33 +43,29 @@ const timeSince = (dateString) => {
 };
 
 const DashboardPage = () => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const { summaryData, isDashboardLoading: loading, fetchDashboardData } = useDashboardStore();
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Mock fetching data from /api/status or similar
     const fetchData = useCallback(async () => {
-        setLoading(true);
         setIsRefreshing(true);
-        console.log("Fetching dashboard data from /api/status...");
-
-        // Simulate API delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        // In a real app, replace this with a fetch call:
-        // const response = await fetch('/api/status');
-        // const result = await response.json();
-        // setData(result.data);
-
-        setData(initialMockData);
-        setLoading(false);
+        console.log("Fetching dashboard data...");
+        await fetchDashboardData();
         setIsRefreshing(false);
-        console.log("Dashboard data loaded.");
-    }, []);
+    }, [fetchDashboardData]);
 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const data = summaryData || { // Fallback to safe defaults or skeletons if null
+        total_resources: 0,
+        running_instances: 0,
+        idle_resources: 0,
+        monthly_cost: 0,
+        potential_savings: 0,
+        recent_audits: []
+    };
 
     const handleRunAudit = () => {
         // This would trigger a POST /api/audit

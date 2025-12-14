@@ -1,45 +1,8 @@
 import React from "react";
 import { Database, Server, HardDrive, Wifi, Box } from "lucide-react";
 
-const resources = [
-    {
-        name: "prod-db",
-        type: "Database",
-        cost: 450,
-        percentage: 18,
-        icon: Database,
-    },
-    {
-        name: "prod-1",
-        type: "Compute",
-        cost: 320,
-        percentage: 13,
-        icon: Server,
-    },
-    {
-        name: "backup-storage",
-        type: "Storage",
-        cost: 180,
-        percentage: 7,
-        icon: HardDrive,
-    },
-    {
-        name: "analytics-vm",
-        type: "Compute",
-        cost: 150,
-        percentage: 6,
-        icon: Server,
-    },
-    {
-        name: "cdn-config",
-        type: "Network",
-        cost: 120,
-        percentage: 5,
-        icon: Wifi,
-    },
-];
-
-const TopResourcesTable = () => {
+const TopResourcesTable = ({ data: resources }) => {
+    if (!resources) return null;
     return (
         <div className="bg-card border border-border-light rounded-xl overflow-hidden shadow-sm">
             <div className="p-6 border-b border-border-light">
