@@ -18,39 +18,18 @@ import ResourceDetailModal from "@/components/resource-components/ResourceDetail
 import StatusBadge from "@/components/resource-components/StatusBadge";
 import DashboardHeader from "@/components/dashboard-components/DashboardHeader";
 
-// --- MOCK DATA GENERATOR ---
-const generateMockResources = (count) => {
-    const types = ["Compute", "Storage", "Database", "Network"];
-    const statuses = ["Running", "Idle", "Stopped", "Error"];
-    const zones = ["us-east-1a", "us-east-1b", "us-west-2a", "eu-central-1"];
-
-    return Array.from({ length: count }, (_, i) => {
-        const type = types[Math.floor(Math.random() * types.length)];
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-
-        return {
-            id: `res-${i + 1}`,
-            name: `${type.toLowerCase()}-instance-${i + 100}`,
-            type,
-            status,
-            zone: zones[Math.floor(Math.random() * zones.length)],
-            cpu_utilization:
-                status === "Running" ? Math.floor(Math.random() * 80) + 10 : 0,
-            memory_utilization:
-                status === "Running" ? Math.floor(Math.random() * 90) + 10 : 0,
-            cost: Math.floor(Math.random() * 500) + 50,
-            disk_size: `${Math.floor(Math.random() * 1000)} GB`,
-            last_active: new Date(
-                Date.now() - Math.floor(Math.random() * 1000000000),
-            ).toISOString(),
-        };
-    });
-};
-
-const MOCK_RESOURCES = generateMockResources(65); // Generate enough for pagination
+import useResourcesStore from "@/store/useResourcesStore";
+import { useEffect } from "react";
 
 // --- MAIN PAGE COMPONENT ---
 const ResourcesPage = () => {
+    const { resources, isResourcesLoading, fetchResources } = useResourcesStore();
+
+    useEffect(() => {
+        fetchResources();
+    }, []);
+
+    // ... rest of component using `resources` instead of MOCK_RESOURCES
     const [searchTerm, setSearchTerm] = useState("");
     const [typeFilter, setTypeFilter] = useState("All");
     const [statusFilter, setStatusFilter] = useState("All");
@@ -64,7 +43,8 @@ const ResourcesPage = () => {
 
     // Filter Logic
     const filteredResources = useMemo(() => {
-        return MOCK_RESOURCES.filter((resource) => {
+        if (!resources) return [];
+        return resources.filter((resource) => {
             const matchesSearch =
                 resource.name
                     .toLowerCase()
@@ -118,8 +98,8 @@ const ResourcesPage = () => {
                 <DashboardHeader
                     title="Resources"
                     userName="Audit User"
-                    // onRefresh={handleRefresh}
-                    // isRefreshing={isRefreshing}
+                // onRefresh={handleRefresh}
+                // isRefreshing={isRefreshing}
                 />
 
                 {/* Filters Bar */}
@@ -224,13 +204,13 @@ const ResourcesPage = () => {
                                             <div className="flex items-center">
                                                 <div className="p-2 rounded-full bg-card border border-border-light mr-3">
                                                     {resource.type ===
-                                                    "Database" ? (
+                                                        "Database" ? (
                                                         <Database className="w-4 h-4 text-teal-400" />
                                                     ) : resource.type ===
-                                                      "Storage" ? (
+                                                        "Storage" ? (
                                                         <HardDrive className="w-4 h-4 text-blue-400" />
                                                     ) : resource.type ===
-                                                      "Compute" ? (
+                                                        "Compute" ? (
                                                         <Cpu className="w-4 h-4 text-accent-dark" />
                                                     ) : (
                                                         <Server className="w-4 h-4 text-indigo-400" />
@@ -264,12 +244,11 @@ const ResourcesPage = () => {
                                             <div className="flex items-center gap-2">
                                                 <div className="w-24 bg-background rounded-full h-1.5 overflow-hidden">
                                                     <div
-                                                        className={`h-1.5 rounded-full ${
-                                                            resource.cpu_utilization >
+                                                        className={`h-1.5 rounded-full ${resource.cpu_utilization >
                                                             80
-                                                                ? "bg-status-error"
-                                                                : "bg-status-running text-accent-dark"
-                                                        }`}
+                                                            ? "bg-status-error"
+                                                            : "bg-status-running text-accent-dark"
+                                                            }`}
                                                         style={{
                                                             width: `${resource.cpu_utilization}%`,
                                                         }}

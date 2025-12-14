@@ -56,6 +56,13 @@ const DashboardPage = () => {
 
     useEffect(() => {
         fetchData();
+
+        // Auto-refresh every 20 seconds
+        const interval = setInterval(() => {
+            fetchData();
+        }, 20000);
+
+        return () => clearInterval(interval);
     }, [fetchData]);
 
     const data = summaryData || { // Fallback to safe defaults or skeletons if null

@@ -14,7 +14,12 @@ const AnalysisPage = () => {
     } = useAgentStore();
 
     const [query, setQuery] = useState("");
-    const [projectId, setProjectId] = useState("my-project"); // Default or fetch from user context
+    // Use stored project ID or default
+    const [projectId, setProjectId] = useState("my-project-123");
+    // Ideally fetch from onboarding store if available
+    // const { status } = useOnboardingStore(); 
+    // useEffect(() => { if(status?.project_id) setProjectId(status.project_id) }, [status]);
+
     const chatEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -101,8 +106,8 @@ const AnalysisPage = () => {
                                 )}
 
                                 <div className={`max-w-[80%] rounded-2xl px-5 py-3 ${msg.role === 'user'
-                                        ? 'bg-accent-dark text-white rounded-br-sm'
-                                        : 'bg-white/5 text-text-secondary border border-border/50 rounded-bl-sm'
+                                    ? 'bg-accent-dark text-white rounded-br-sm'
+                                    : 'bg-white/5 text-text-secondary border border-border/50 rounded-bl-sm'
                                     }`}>
                                     <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
                                 </div>

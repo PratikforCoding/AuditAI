@@ -11,6 +11,7 @@ const Navbar = () => {
         { name: "Analytics", href: "/analytics" },
         { name: "Audits", href: "/audits" },
         { name: "Recommendations", href: "/recommendations" },
+        { name: "Analysis", href: "/analysis" },
         { name: "Settings", href: "/schedule" },
     ];
 
@@ -22,11 +23,10 @@ const Navbar = () => {
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={`pb-3 text-sm font-medium transition-colors relative ${
-                            isActive
+                        className={`pb-3 text-sm font-medium transition-colors relative ${isActive
                                 ? "text-accent-light"
                                 : "text-neutral-400 hover:text-neutral-200"
-                        }`}
+                            }`}
                     >
                         {item.name}
                         {isActive && (
